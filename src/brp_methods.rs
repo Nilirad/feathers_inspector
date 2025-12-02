@@ -10,11 +10,18 @@
 //! to understand the names of the registered methods.
 
 use bevy::{
+    ecs::query::QueryEntityError,
     prelude::*,
-    remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
+    remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods, error_codes},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::{
+    component_inspection::ComponentMetadataMap,
+    entity_inspection::{EntityInspectionError, EntityInspectionSettings},
+    extension_methods::WorldInspectionExtensionTrait,
+};
 
 pub const BRP_WORLD_INSPECT_METHOD: &str = "world.inspect";
 pub const BRP_WORLD_INSPECT_CACHED_METHOD: &str = "world.inspect_cached";
@@ -24,6 +31,27 @@ pub const BRP_WORLD_INSPECT_RESOURCE_BY_ID_METHOD: &str = "world.inspect_resourc
 pub const BRP_WORLD_INSPECT_ALL_RESOURCES_METHOD: &str = "world.inspect_all_resources";
 pub const BRP_WORLD_INSPECT_COMPONENT_TYPE_BY_ID_METHOD: &str =
     "world.inspect_component_type_by_id";
+
+/// A helper function used to parse a `serde_json::Value`.
+fn parse<T: for<'de> Deserialize<'de>>(value: Value) -> Result<T, BrpError> {
+    serde_json::from_value(value).map_err(|err| BrpError {
+        code: error_codes::INVALID_PARAMS,
+        message: err.to_string(),
+        data: None,
+    })
+}
+
+/// A helper function used to parse a `serde_json::Value` wrapped in an `Option`.
+fn parse_some<T: for<'de> Deserialize<'de>>(value: Option<Value>) -> Result<T, BrpError> {
+    match value {
+        Some(value) => parse(value),
+        None => Err(BrpError {
+            code: error_codes::INVALID_PARAMS,
+            message: String::from("Params not provided"),
+            data: None,
+        }),
+    }
+}
 
 /// Provides inspection methods defined in this crate
 /// to be called via BRP.
@@ -92,13 +120,20 @@ impl Plugin for InspectorBrpPlugin {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BrpWorldInspectParams;
+pub struct BrpWorldInspectParams {
+    pub entity: Entity,
+    pub settings: EntityInspectionSettings,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectResponse;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BrpWorldInspectCachedParams;
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BrpWorldInspectCachedParams {
+    entity: Entity,
+    settings: EntityInspectionSettings,
+    metadata_map: ComponentMetadataMap,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectCachedResponse;
@@ -133,22 +168,53 @@ pub struct BrpWorldInspectComponentTypeByIdParams;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectComponentTypeByIdResponse;
 
+fn inspect_cached_brp(
+    world: &World,
+    entity: Entity,
+    settings: EntityInspectionSettings,
+    metadata_map: ComponentMetadataMap,
+) -> std::result::Result<Value, BrpError> {
+    let entity_inspection = world.inspect_cached(entity, &settings, &metadata_map);
+    match entity_inspection {
+        Ok(entity_inspection) => {
+            serde_json::to_value(entity_inspection).map_err(BrpError::internal)
+        }
+        Err(inspection_error) => match inspection_error {
+            EntityInspectionError::EntityNotFound(_) => Err(BrpError::entity_not_found(entity)),
+            EntityInspectionError::UnexpectedQueryError(query_entity_error) => {
+                match query_entity_error {
+                    QueryEntityError::QueryDoesNotMatch(_, _) => unreachable!(),
+                    QueryEntityError::EntityDoesNotExist(_) => {
+                        Err(BrpError::entity_not_found(entity))
+                    }
+                    QueryEntityError::AliasedMutability(_) => unreachable!(),
+                }
+            }
+        },
+    }
+}
+
 /// Handles a `world.inspect` request coming from a client.
 pub fn process_remote_world_inspect_request(
-    In(_params): In<Option<Value>>,
-    _world: &World,
+    In(params): In<Option<Value>>,
+    world: &World,
 ) -> BrpResult {
-    let response = "called `world.inspect` handler successfully.";
-    serde_json::to_value(response).map_err(BrpError::internal)
+    let BrpWorldInspectParams { entity, settings } = parse_some(params)?;
+    let metadata_map = ComponentMetadataMap::for_entity(world, entity);
+    inspect_cached_brp(world, entity, settings, metadata_map)
 }
 
 /// Handles a `world.inspect_cached` request coming from a client.
 pub fn process_remote_world_inspect_cached_request(
-    In(_params): In<Option<Value>>,
-    _world: &World,
+    In(params): In<Option<Value>>,
+    world: &World,
 ) -> BrpResult {
-    let response = "called `world.inspect_cached` handler successfully.";
-    serde_json::to_value(response).map_err(BrpError::internal)
+    let BrpWorldInspectCachedParams {
+        entity,
+        settings,
+        metadata_map,
+    } = parse_some(params)?;
+    inspect_cached_brp(world, entity, settings, metadata_map)
 }
 
 /// Handles a `world.inspect_multiple` request coming from a client.

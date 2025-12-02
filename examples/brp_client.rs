@@ -8,8 +8,11 @@
 
 use bevy::prelude::*;
 use bevy::remote::BrpRequest;
+use bevy::remote::builtin_methods::{BRP_QUERY_METHOD, BrpQuery, BrpQueryFilter, BrpQueryParams};
 use bevy::remote::http::{DEFAULT_ADDR, DEFAULT_PORT};
-use feathers_inspector::brp_methods::{self, BrpWorldInspectMultipleParams};
+use feathers_inspector::brp_methods::{self, BrpWorldInspectParams};
+use feathers_inspector::component_inspection::{ComponentDetailLevel, ComponentInspectionSettings};
+use feathers_inspector::entity_inspection::EntityInspectionSettings;
 
 #[derive(Resource, Debug)]
 struct BrpUrl(String);
@@ -57,21 +60,64 @@ fn inspect_all_entities_when_space_pressed(
     brp_url: Res<BrpUrl>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
-        let brp_request = BrpRequest {
+        // Query all entities
+        let query_entities_request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_MULTIPLE_METHOD.to_string(),
+            method: String::from(BRP_QUERY_METHOD),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectMultipleParams)
-                    .expect("Unable to convert query parameters to a valid JSON value"),
+                serde_json::to_value(BrpQueryParams {
+                    data: BrpQuery::default(),
+                    filter: BrpQueryFilter::default(),
+                    strict: false,
+                })
+                .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
         let response = ureq::post(&brp_url.0)
-            .send_json(brp_request)
+            .send_json(query_entities_request)
             .expect("Failed to send JSON to server")
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        info!("{response}");
+        let entities: Vec<Entity> = response["result"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item["entity"].as_u64())
+                    .map(Entity::from_bits)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Inspect entities
+        for entity in entities {
+            let brp_request = BrpRequest {
+                jsonrpc: String::from("2.0"),
+                method: brp_methods::BRP_WORLD_INSPECT_METHOD.to_string(),
+                id: None,
+                params: Some(
+                    serde_json::to_value(BrpWorldInspectParams {
+                        entity,
+                        settings: EntityInspectionSettings {
+                            include_components: false,
+                            component_settings: ComponentInspectionSettings {
+                                detail_level: ComponentDetailLevel::Values,
+                                full_type_names: true,
+                            },
+                        },
+                    })
+                    .expect("Unable to convert query parameters to a valid JSON value"),
+                ),
+            };
+            let response = ureq::post(&brp_url.0)
+                .send_json(brp_request)
+                .expect("Failed to send JSON to server")
+                .body_mut()
+                .read_json::<serde_json::Value>()
+                .expect("Failed to read JSON response");
+            info!("{response}");
+        }
     }
 }

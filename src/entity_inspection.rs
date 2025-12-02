@@ -130,7 +130,7 @@ impl From<QueryEntityError> for EntityInspectionError {
 }
 
 /// Settings for inspecting an individual entity.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EntityInspectionSettings {
     /// Should component information be included in the inspection?

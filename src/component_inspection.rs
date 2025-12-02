@@ -344,7 +344,7 @@ pub enum ComponentInspectionError {
 }
 
 /// Settings for inspecting a component.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ComponentInspectionSettings {
     /// How much detail to include when inspecting component values.
