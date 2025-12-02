@@ -28,6 +28,7 @@ use crate::{
 
 /// The result of inspecting an entity.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct EntityInspection {
     /// The entity being inspected.
     pub entity: Entity,
@@ -45,6 +46,10 @@ pub struct EntityInspection {
     /// The components on the entity, in inspection form.
     pub components: Option<Vec<ComponentInspection>>,
     /// Information about how this entity was spawned.
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "crate::serde_conversions::serialize_spawn_details")
+    )]
     pub spawn_details: SpawnDetails,
 }
 
@@ -91,13 +96,22 @@ impl Display for EntityInspection {
 
 /// An error that can occur when attempting to inspect an entity.
 #[derive(Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum EntityInspectionError {
     /// The entity does not exist in the world.
     #[error("Entity not found: {0}")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "crate::serde_conversions::serialize_entity_does_not_exist_error")
+    )]
     EntityNotFound(EntityDoesNotExistError),
     /// A catch-all variant for inspection errors that should never happen
     /// when just querying an entity and its metadata.
     #[error("Unexpected QueryEntityError: {0}")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "crate::serde_conversions::serialize_query_entity_error")
+    )]
     UnexpectedQueryError(QueryEntityError),
 }
 
@@ -117,6 +131,7 @@ impl From<QueryEntityError> for EntityInspectionError {
 
 /// Settings for inspecting an individual entity.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EntityInspectionSettings {
     /// Should component information be included in the inspection?
     ///
@@ -140,6 +155,7 @@ impl Default for EntityInspectionSettings {
 
 /// Settings for inspecting multiple entities at once.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultipleEntityInspectionSettings {
     /// A [`NameFilter`] to search for within entity names.
     ///
@@ -152,11 +168,19 @@ pub struct MultipleEntityInspectionSettings {
     /// If empty, no component presence filtering will be applied.
     ///
     /// Defaults to an empty list.
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "crate::serde_conversions::slice_component_id")
+    )]
     pub with_component_filter: Vec<ComponentId>,
     /// Components that must not be present on each entity to be inspected.
     /// If empty, no component absence filtering will be applied.
     ///
     /// Defaults to an empty list.
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "crate::serde_conversions::slice_component_id")
+    )]
     pub without_component_filter: Vec<ComponentId>,
     /// Settings used when inspecting each individual entity.
     ///
@@ -194,6 +218,7 @@ impl Default for MultipleEntityInspectionSettings {
 /// so you can construct using `NameFilter::from("name")`.
 /// Keep in mind that in this case the matches will be case-insensitive.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NameFilter {
     /// The substring that entities have to match to be included.
     query: String,
