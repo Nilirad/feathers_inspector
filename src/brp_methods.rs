@@ -31,6 +31,7 @@ pub const BRP_WORLD_INSPECT_RESOURCE_BY_ID_METHOD: &str = "world.inspect_resourc
 pub const BRP_WORLD_INSPECT_ALL_RESOURCES_METHOD: &str = "world.inspect_all_resources";
 pub const BRP_WORLD_INSPECT_COMPONENT_TYPE_BY_ID_METHOD: &str =
     "world.inspect_component_type_by_id";
+pub const BRP_COMPONENT_METADATA_MAP_GENERATE_METHOD: &str = "component_metadata_map.generate";
 
 /// A helper function used to parse a `serde_json::Value`.
 fn parse<T: for<'de> Deserialize<'de>>(value: Value) -> Result<T, BrpError> {
@@ -81,6 +82,8 @@ impl Plugin for InspectorBrpPlugin {
             world.register_system(process_remote_world_inspect_all_resources_request);
         let world_inspect_component_type_by_id_id =
             world.register_system(process_remote_world_inspect_component_type_by_id_request);
+        let component_metadata_map_generate_id =
+            world.register_system(process_remote_component_metadata_map_generate_request);
 
         // Avoids adding `RemotePlugin` by design,
         // since users might also want to add it themselves for other purposes.
@@ -116,6 +119,10 @@ impl Plugin for InspectorBrpPlugin {
             BRP_WORLD_INSPECT_COMPONENT_TYPE_BY_ID_METHOD,
             RemoteMethodSystemId::Instant(world_inspect_component_type_by_id_id),
         );
+        remote_methods.insert(
+            BRP_COMPONENT_METADATA_MAP_GENERATE_METHOD,
+            RemoteMethodSystemId::Instant(component_metadata_map_generate_id),
+        );
     }
 }
 
@@ -130,9 +137,10 @@ pub struct BrpWorldInspectResponse;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BrpWorldInspectCachedParams {
-    entity: Entity,
-    settings: EntityInspectionSettings,
-    metadata_map: ComponentMetadataMap,
+    pub entity: Entity,
+    pub settings: EntityInspectionSettings,
+    // PERF: Use reference instead, since struct is heavy.
+    pub metadata_map: ComponentMetadataMap,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -260,4 +268,13 @@ pub fn process_remote_world_inspect_component_type_by_id_request(
 ) -> BrpResult {
     let response = "called `world.inspect_component_type_by_id` handler successfully.";
     serde_json::to_value(response).map_err(BrpError::internal)
+}
+
+/// Handles a `component_metadata_map.generate` request coming from a client.
+pub fn process_remote_component_metadata_map_generate_request(
+    In(_params): In<Option<Value>>,
+    world: &World,
+) -> BrpResult {
+    let metadata_map = ComponentMetadataMap::generate(world);
+    serde_json::to_value(metadata_map).map_err(BrpError::internal)
 }
