@@ -60,7 +60,20 @@ fn inspect_all_entities_when_space_pressed(
     brp_url: Res<BrpUrl>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
-        // Query all entities
+        let entities = helper::query_all_entities(&brp_url.0);
+        for entity in entities {
+            let inspection = helper::inspect_entity(entity, &brp_url.0);
+            info!("{inspection}");
+        }
+    }
+}
+
+// Since BRP request and response handling are quite verbose,
+// we define a helper module to contain the complexity.
+mod helper {
+    use super::*;
+
+    pub fn query_all_entities(url: &str) -> Vec<Entity> {
         let query_entities_request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: String::from(BRP_QUERY_METHOD),
@@ -74,50 +87,49 @@ fn inspect_all_entities_when_space_pressed(
                 .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
-        let response = ureq::post(&brp_url.0)
+        let response = ureq::post(url)
             .send_json(query_entities_request)
             .expect("Failed to send JSON to server")
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        let entities: Vec<Entity> = response["result"]
+        response["result"]
             .as_array()
             .map(|items| {
                 items
                     .iter()
                     .filter_map(|item| item["entity"].as_u64())
                     .map(Entity::from_bits)
-                    .collect()
+                    .collect::<Vec<Entity>>()
             })
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
 
-        // Inspect entities
-        for entity in entities {
-            let brp_request = BrpRequest {
-                jsonrpc: String::from("2.0"),
-                method: brp_methods::BRP_WORLD_INSPECT_METHOD.to_string(),
-                id: None,
-                params: Some(
-                    serde_json::to_value(BrpWorldInspectParams {
-                        entity,
-                        settings: EntityInspectionSettings {
-                            include_components: false,
-                            component_settings: ComponentInspectionSettings {
-                                detail_level: ComponentDetailLevel::Values,
-                                full_type_names: true,
-                            },
+    pub fn inspect_entity(entity: Entity, url: &str) -> String {
+        let brp_request = BrpRequest {
+            jsonrpc: String::from("2.0"),
+            method: brp_methods::BRP_WORLD_INSPECT_METHOD.to_string(),
+            id: None,
+            params: Some(
+                serde_json::to_value(BrpWorldInspectParams {
+                    entity,
+                    settings: EntityInspectionSettings {
+                        include_components: false,
+                        component_settings: ComponentInspectionSettings {
+                            detail_level: ComponentDetailLevel::Values,
+                            full_type_names: true,
                         },
-                    })
-                    .expect("Unable to convert query parameters to a valid JSON value"),
-                ),
-            };
-            let response = ureq::post(&brp_url.0)
-                .send_json(brp_request)
-                .expect("Failed to send JSON to server")
-                .body_mut()
-                .read_json::<serde_json::Value>()
-                .expect("Failed to read JSON response");
-            info!("{response}");
-        }
+                    },
+                })
+                .expect("Unable to convert query parameters to a valid JSON value"),
+            ),
+        };
+        let response = ureq::post(url)
+            .send_json(brp_request)
+            .expect("Failed to send JSON to server")
+            .body_mut()
+            .read_json::<serde_json::Value>()
+            .expect("Failed to read JSON response");
+        response.to_string()
     }
 }
