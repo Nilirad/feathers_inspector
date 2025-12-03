@@ -19,7 +19,9 @@ use serde_json::Value;
 
 use crate::{
     component_inspection::ComponentMetadataMap,
-    entity_inspection::{EntityInspectionError, EntityInspectionSettings},
+    entity_inspection::{
+        EntityInspectionError, EntityInspectionSettings, MultipleEntityInspectionSettings,
+    },
     extension_methods::WorldInspectionExtensionTrait,
 };
 
@@ -146,8 +148,13 @@ pub struct BrpWorldInspectCachedParams {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectCachedResponse;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BrpWorldInspectMultipleParams;
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BrpWorldInspectMultipleParams {
+    pub entities: Vec<Entity>,
+    pub settings: MultipleEntityInspectionSettings,
+    // PERF: Use reference instead, since struct is heavy.
+    pub metadata_map: ComponentMetadataMap,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectMultipleResponse;
@@ -179,8 +186,8 @@ pub struct BrpWorldInspectComponentTypeByIdResponse;
 fn inspect_cached_brp(
     world: &World,
     entity: Entity,
-    settings: EntityInspectionSettings,
-    metadata_map: ComponentMetadataMap,
+    settings: &EntityInspectionSettings,
+    metadata_map: &ComponentMetadataMap,
 ) -> std::result::Result<Value, BrpError> {
     let entity_inspection = world.inspect_cached(entity, &settings, &metadata_map);
     match entity_inspection {
@@ -209,7 +216,7 @@ pub fn process_remote_world_inspect_request(
 ) -> BrpResult {
     let BrpWorldInspectParams { entity, settings } = parse_some(params)?;
     let metadata_map = ComponentMetadataMap::for_entity(world, entity);
-    inspect_cached_brp(world, entity, settings, metadata_map)
+    inspect_cached_brp(world, entity, &settings, &metadata_map)
 }
 
 /// Handles a `world.inspect_cached` request coming from a client.
@@ -222,16 +229,21 @@ pub fn process_remote_world_inspect_cached_request(
         settings,
         metadata_map,
     } = parse_some(params)?;
-    inspect_cached_brp(world, entity, settings, metadata_map)
+    inspect_cached_brp(world, entity, &settings, &metadata_map)
 }
 
 /// Handles a `world.inspect_multiple` request coming from a client.
 pub fn process_remote_world_inspect_multiple_request(
-    In(_params): In<Option<Value>>,
-    _world: &World,
+    In(params): In<Option<Value>>,
+    world: &World,
 ) -> BrpResult {
-    let response = "called `world.inspect_multiple` handler successfully.";
-    serde_json::to_value(response).map_err(BrpError::internal)
+    let BrpWorldInspectMultipleParams {
+        entities,
+        settings,
+        mut metadata_map,
+    } = parse_some(params)?;
+    let inspection = world.inspect_multiple(entities, settings, &mut metadata_map);
+    serde_json::to_value(inspection).map_err(BrpError::internal)
 }
 
 /// Handles a `world.inspect_component_by_id` request coming from a client.

@@ -12,7 +12,11 @@ use bevy::remote::builtin_methods::{BRP_QUERY_METHOD, BrpQuery, BrpQueryFilter, 
 use bevy::remote::http::{DEFAULT_ADDR, DEFAULT_PORT};
 use feathers_inspector::brp_methods::{self, BrpWorldInspectParams};
 use feathers_inspector::component_inspection::{ComponentDetailLevel, ComponentInspectionSettings};
-use feathers_inspector::entity_inspection::EntityInspectionSettings;
+use feathers_inspector::entity_inspection::{
+    EntityInspectionSettings, MultipleEntityInspectionSettings,
+};
+
+use crate::helper::inspect_multiple;
 
 #[derive(Resource, Debug)]
 struct BrpUrl(String);
@@ -62,19 +66,28 @@ fn inspect_all_entities_when_space_pressed(
     if keyboard_input.just_pressed(KeyCode::Space) {
         let entities = helper::query_all_entities(&brp_url.0);
         let component_metadata = helper::generate_component_metadata(&brp_url.0);
-        for entity in entities {
-            let inspection = helper::inspect_entity_cached(entity, &component_metadata, &brp_url.0);
-            info!("{inspection}");
-        }
+        let settings = MultipleEntityInspectionSettings {
+            entity_settings: EntityInspectionSettings {
+                include_components: false,
+                ..default()
+            },
+            ..default()
+        };
+        let inspection = inspect_multiple(entities, settings, component_metadata, &brp_url.0);
+        info!("{inspection}");
     }
 }
 
 // Since BRP request and response handling are quite verbose,
 // we define a helper module to contain the complexity.
+// TODO: Helpers should return concrete types instead of a JSON string,
+//       just like `generate_component_metadata` does.
 mod helper {
 
     use feathers_inspector::{
-        brp_methods::BrpWorldInspectCachedParams, component_inspection::ComponentMetadataMap,
+        brp_methods::{BrpWorldInspectCachedParams, BrpWorldInspectMultipleParams},
+        component_inspection::ComponentMetadataMap,
+        entity_inspection::MultipleEntityInspectionSettings,
     };
 
     use super::*;
@@ -120,6 +133,7 @@ mod helper {
             params: Some(
                 serde_json::to_value(BrpWorldInspectParams {
                     entity,
+                    // TODO: Parametrize `EntityInspectionSettings`.
                     settings: EntityInspectionSettings {
                         include_components: false,
                         component_settings: ComponentInspectionSettings {
@@ -140,6 +154,7 @@ mod helper {
         response.to_string()
     }
 
+    #[allow(dead_code)]
     pub fn inspect_entity_cached(
         entity: Entity,
         metadata_map: &ComponentMetadataMap,
@@ -152,6 +167,7 @@ mod helper {
             params: Some(
                 serde_json::to_value(BrpWorldInspectCachedParams {
                     entity,
+                    // TODO: Parametrize `EntityInspectionSettings`.
                     settings: EntityInspectionSettings {
                         include_components: false,
                         component_settings: ComponentInspectionSettings {
@@ -160,6 +176,34 @@ mod helper {
                         },
                     },
                     metadata_map: metadata_map.clone(),
+                })
+                .expect("Unable to convert query parameters to a valid JSON value"),
+            ),
+        };
+        let response = ureq::post(url)
+            .send_json(brp_request)
+            .expect("Failed to send JSON to server")
+            .body_mut()
+            .read_json::<serde_json::Value>()
+            .expect("Failed to read JSON response");
+        response.to_string()
+    }
+
+    pub fn inspect_multiple(
+        entities: impl IntoIterator<Item = Entity>,
+        settings: MultipleEntityInspectionSettings,
+        metadata_map: ComponentMetadataMap,
+        url: &str,
+    ) -> String {
+        let brp_request = BrpRequest {
+            jsonrpc: String::from("2.0"),
+            method: brp_methods::BRP_WORLD_INSPECT_MULTIPLE_METHOD.to_string(),
+            id: None,
+            params: Some(
+                serde_json::to_value(BrpWorldInspectMultipleParams {
+                    entities: entities.into_iter().collect::<Vec<Entity>>(),
+                    settings,
+                    metadata_map,
                 })
                 .expect("Unable to convert query parameters to a valid JSON value"),
             ),
