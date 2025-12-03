@@ -10,7 +10,7 @@
 //! to understand the names of the registered methods.
 
 use bevy::{
-    ecs::query::QueryEntityError,
+    ecs::{component::ComponentId, query::QueryEntityError},
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods, error_codes},
 };
@@ -18,7 +18,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    component_inspection::ComponentMetadataMap,
+    component_inspection::{
+        ComponentInspectionError, ComponentInspectionSettings, ComponentMetadataMap,
+        ComponentTypeMetadata,
+    },
     entity_inspection::{
         EntityInspectionError, EntityInspectionSettings, MultipleEntityInspectionSettings,
     },
@@ -159,8 +162,17 @@ pub struct BrpWorldInspectMultipleParams {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectMultipleResponse;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BrpWorldInspectComponentByIdParams;
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BrpWorldInspectComponentByIdParams {
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "crate::serde_conversions::component_id")
+    )]
+    pub component_id: ComponentId,
+    pub entity: Entity,
+    pub metadata: ComponentTypeMetadata,
+    pub settings: ComponentInspectionSettings,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectComponentByIdResponse;
@@ -189,7 +201,7 @@ fn inspect_cached_brp(
     settings: &EntityInspectionSettings,
     metadata_map: &ComponentMetadataMap,
 ) -> std::result::Result<Value, BrpError> {
-    let entity_inspection = world.inspect_cached(entity, &settings, &metadata_map);
+    let entity_inspection = world.inspect_cached(entity, settings, metadata_map);
     match entity_inspection {
         Ok(entity_inspection) => {
             serde_json::to_value(entity_inspection).map_err(BrpError::internal)
@@ -248,11 +260,30 @@ pub fn process_remote_world_inspect_multiple_request(
 
 /// Handles a `world.inspect_component_by_id` request coming from a client.
 pub fn process_remote_world_inspect_component_by_id_request(
-    In(_params): In<Option<Value>>,
-    _world: &World,
+    In(params): In<Option<Value>>,
+    world: &World,
 ) -> BrpResult {
-    let response = "called `world.inspect_component_by_id` handler successfully.";
-    serde_json::to_value(response).map_err(BrpError::internal)
+    let BrpWorldInspectComponentByIdParams {
+        component_id,
+        entity,
+        metadata,
+        settings,
+    } = parse_some(params)?;
+    match world.inspect_component_by_id(component_id, entity, &metadata, settings) {
+        Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
+        Err(error) => match error {
+            // TODO: Use component name instead of index.
+            ComponentInspectionError::ComponentNotFound(component_id) => Err(
+                BrpError::component_not_present(&component_id.index().to_string(), entity),
+            ),
+            ComponentInspectionError::ComponentNotRegistered(component_name) => Err(
+                BrpError::component_error(format!("Component not registered: {component_name}")),
+            ),
+            ComponentInspectionError::ComponentIdNotRegistered(component_id) => Err(
+                BrpError::component_error(format!("Component id not registered: {component_id:?}")),
+            ),
+        },
+    }
 }
 
 /// Handles a `world.inspect_resource_by_id` request coming from a client.

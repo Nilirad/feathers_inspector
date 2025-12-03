@@ -16,7 +16,9 @@ use feathers_inspector::entity_inspection::{
     EntityInspectionSettings, MultipleEntityInspectionSettings,
 };
 
-use crate::helper::inspect_multiple;
+use crate::helper::{inspect_component, inspect_multiple};
+
+const SPRITE_COMPONENT_NAME: &str = "bevy_sprite::sprite::Sprite";
 
 #[derive(Resource, Debug)]
 struct BrpUrl(String);
@@ -33,7 +35,13 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .init_resource::<BrpUrl>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (inspect_all_entities_when_space_pressed,))
+        .add_systems(
+            Update,
+            (
+                inspect_all_entities_when_space_pressed,
+                inspect_specific_component_when_c_pressed,
+            ),
+        )
         .run();
 }
 
@@ -45,7 +53,8 @@ This is your client process, that connects to the Bevy app via BRP.
 You can use the keyboard buttons to send BRP requests.
 Output will be shown in the console.
 
-Press `Space` to inspect all entities"
+Press `Space` to inspect all entities
+Press 'C' to inspect the Sprite component on all Sprite entities"
         .to_string();
 
     commands.spawn((
@@ -78,15 +87,46 @@ fn inspect_all_entities_when_space_pressed(
     }
 }
 
+fn inspect_specific_component_when_c_pressed(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    brp_url: Res<BrpUrl>,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyC) {
+        let entities = helper::query_sprite_entities(&brp_url.0);
+        let settings = ComponentInspectionSettings {
+            detail_level: ComponentDetailLevel::Values,
+            full_type_names: true,
+        };
+        let component_metadata = helper::generate_component_metadata(&brp_url.0);
+        let (component_id, sprite_metadata) = component_metadata
+            .map
+            .iter()
+            .find_map(|(id, meta)| {
+                let full = meta.name.to_string();
+                (full == SPRITE_COMPONENT_NAME).then_some((*id, meta))
+            })
+            .expect("Sprite metadata not found in remote world");
+        for entity in entities {
+            let inspection =
+                inspect_component(component_id, entity, sprite_metadata, settings, &brp_url.0);
+            info!("{inspection}");
+        }
+    }
+}
+
 // Since BRP request and response handling are quite verbose,
 // we define a helper module to contain the complexity.
 // TODO: Helpers should return concrete types instead of a JSON string,
 //       just like `generate_component_metadata` does.
 mod helper {
 
+    use bevy::ecs::component::ComponentId;
     use feathers_inspector::{
-        brp_methods::{BrpWorldInspectCachedParams, BrpWorldInspectMultipleParams},
-        component_inspection::ComponentMetadataMap,
+        brp_methods::{
+            BrpWorldInspectCachedParams, BrpWorldInspectComponentByIdParams,
+            BrpWorldInspectMultipleParams,
+        },
+        component_inspection::{ComponentMetadataMap, ComponentTypeMetadata},
         entity_inspection::MultipleEntityInspectionSettings,
     };
 
@@ -101,6 +141,41 @@ mod helper {
                 serde_json::to_value(BrpQueryParams {
                     data: BrpQuery::default(),
                     filter: BrpQueryFilter::default(),
+                    strict: false,
+                })
+                .expect("Unable to convert query parameters to a valid JSON value"),
+            ),
+        };
+        let response = ureq::post(url)
+            .send_json(query_entities_request)
+            .expect("Failed to send JSON to server")
+            .body_mut()
+            .read_json::<serde_json::Value>()
+            .expect("Failed to read JSON response");
+        response["result"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item["entity"].as_u64())
+                    .map(Entity::from_bits)
+                    .collect::<Vec<Entity>>()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn query_sprite_entities(url: &str) -> Vec<Entity> {
+        let query_entities_request = BrpRequest {
+            jsonrpc: String::from("2.0"),
+            method: String::from(BRP_QUERY_METHOD),
+            id: None,
+            params: Some(
+                serde_json::to_value(BrpQueryParams {
+                    data: BrpQuery::default(),
+                    filter: BrpQueryFilter {
+                        with: vec![SPRITE_COMPONENT_NAME.to_string()],
+                        ..default()
+                    },
                     strict: false,
                 })
                 .expect("Unable to convert query parameters to a valid JSON value"),
@@ -235,5 +310,35 @@ mod helper {
             .expect("Missing 'result' field in JSON-RPC response");
         serde_json::from_value::<ComponentMetadataMap>(result.clone())
             .expect("Failed to deserialize `ComponentMetadataMap`")
+    }
+
+    pub fn inspect_component(
+        component_id: ComponentId,
+        entity: Entity,
+        metadata: &ComponentTypeMetadata,
+        settings: ComponentInspectionSettings,
+        url: &str,
+    ) -> String {
+        let request = BrpRequest {
+            jsonrpc: String::from("2.0"),
+            method: brp_methods::BRP_WORLD_INSPECT_COMPONENT_BY_ID_METHOD.to_string(),
+            id: None,
+            params: Some(
+                serde_json::to_value(BrpWorldInspectComponentByIdParams {
+                    component_id,
+                    entity,
+                    metadata: metadata.clone(),
+                    settings,
+                })
+                .expect("Unable to convert query parameters to a valid JSON value"),
+            ),
+        };
+        let response = ureq::post(url)
+            .send_json(request)
+            .expect("Failed to send JSON to server")
+            .body_mut()
+            .read_json::<serde_json::Value>()
+            .expect("Failed to read JSON response");
+        response.to_string()
     }
 }
