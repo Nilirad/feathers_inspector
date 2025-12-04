@@ -210,11 +210,15 @@ fn inspect_cached_brp(
             EntityInspectionError::EntityNotFound(_) => Err(BrpError::entity_not_found(entity)),
             EntityInspectionError::UnexpectedQueryError(query_entity_error) => {
                 match query_entity_error {
-                    QueryEntityError::QueryDoesNotMatch(_, _) => unreachable!(),
+                    QueryEntityError::QueryDoesNotMatch(_, _) => Err(BrpError::internal(
+                        "Reached invalid state: `QueryDoesNotMatch` on `SpawnDetails`",
+                    )),
                     QueryEntityError::EntityDoesNotExist(_) => {
                         Err(BrpError::entity_not_found(entity))
                     }
-                    QueryEntityError::AliasedMutability(_) => unreachable!(),
+                    QueryEntityError::AliasedMutability(_) => Err(BrpError::internal(
+                        "Reached invalid state: `AliasedMutability`",
+                    )),
                 }
             }
         },
