@@ -192,7 +192,9 @@ pub struct BrpWorldInspectResourceByIdParams {
 pub struct BrpWorldInspectResourceByIdResponse;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BrpWorldInspectAllResourcesParams;
+pub struct BrpWorldInspectAllResourcesParams {
+    pub settings: ResourceInspectionSettings,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectAllResourcesResponse;
@@ -322,11 +324,12 @@ pub fn process_remote_world_inspect_resource_by_id_request(
 
 /// Handles a `world.inspect_all_resources` request coming from a client.
 pub fn process_remote_world_inspect_all_resources_request(
-    In(_params): In<Option<Value>>,
-    _world: &World,
+    In(params): In<Option<Value>>,
+    world: &World,
 ) -> BrpResult {
-    let response = "called `world.inspect_all_resources` handler successfully.";
-    serde_json::to_value(response).map_err(BrpError::internal)
+    let BrpWorldInspectAllResourcesParams { settings } = parse_some(params)?;
+    let inspection = world.inspect_all_resources(settings);
+    serde_json::to_value(inspection).map_err(BrpError::internal)
 }
 
 /// Handles a `world.inspect_component_type_by_id` request coming from a client.
