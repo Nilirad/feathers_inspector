@@ -86,7 +86,7 @@ pub enum ResourceInspectionError {
 
 /// Settings that can be used to customize resource inspection,
 /// changing how [`ResourceInspection`] is generated and displayed.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ResourceInspectionSettings {
     /// Whether or not full type names should be displayed.

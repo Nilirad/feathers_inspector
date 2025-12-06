@@ -15,10 +15,12 @@ use feathers_inspector::component_inspection::{ComponentDetailLevel, ComponentIn
 use feathers_inspector::entity_inspection::{
     EntityInspectionSettings, MultipleEntityInspectionSettings,
 };
+use feathers_inspector::resource_inspection::ResourceInspectionSettings;
 
 use crate::helper::{inspect_component, inspect_multiple};
 
 const SPRITE_COMPONENT_NAME: &str = "bevy_sprite::sprite::Sprite";
+const AMBIENT_LIGHT_COMPONENT_NAME: &str = "bevy_light::ambient_light::AmbientLight";
 
 #[derive(Resource, Debug)]
 struct BrpUrl(String);
@@ -40,6 +42,7 @@ fn main() {
             (
                 inspect_all_entities_when_space_pressed,
                 inspect_specific_component_when_c_pressed,
+                inspect_resource_when_r_pressed,
             ),
         )
         .run();
@@ -54,7 +57,8 @@ You can use the keyboard buttons to send BRP requests.
 Output will be shown in the console.
 
 Press `Space` to inspect all entities
-Press 'C' to inspect the Sprite component on all Sprite entities"
+Press 'C' to inspect the Sprite component on all Sprite entities
+Press 'R' to inspect the AmbientLight resource"
         .to_string();
 
     commands.spawn((
@@ -114,20 +118,42 @@ fn inspect_specific_component_when_c_pressed(
     }
 }
 
+fn inspect_resource_when_r_pressed(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    brp_url: Res<BrpUrl>,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyR) {
+        let component_metadata = helper::generate_component_metadata(&brp_url.0);
+        let settings = ResourceInspectionSettings {
+            full_type_names: true,
+        };
+        let component_id = component_metadata
+            .map
+            .iter()
+            .find_map(|(id, meta)| {
+                let full = meta.name.to_string();
+                (full == AMBIENT_LIGHT_COMPONENT_NAME).then_some(*id)
+            })
+            .expect("`AmbientLight` metadata not found in remote world");
+        let inspection = helper::inspect_resource(component_id, settings, &brp_url.0);
+        info!("{inspection}");
+    }
+}
+
 // Since BRP request and response handling are quite verbose,
 // we define a helper module to contain the complexity.
 // TODO: Helpers should return concrete types instead of a JSON string,
 //       just like `generate_component_metadata` does.
 mod helper {
-
     use bevy::ecs::component::ComponentId;
     use feathers_inspector::{
         brp_methods::{
             BrpWorldInspectCachedParams, BrpWorldInspectComponentByIdParams,
-            BrpWorldInspectMultipleParams,
+            BrpWorldInspectMultipleParams, BrpWorldInspectResourceByIdParams,
         },
         component_inspection::{ComponentMetadataMap, ComponentTypeMetadata},
         entity_inspection::MultipleEntityInspectionSettings,
+        resource_inspection::ResourceInspectionSettings,
     };
 
     use super::*;
@@ -328,6 +354,32 @@ mod helper {
                     component_id,
                     entity,
                     metadata: metadata.clone(),
+                    settings,
+                })
+                .expect("Unable to convert query parameters to a valid JSON value"),
+            ),
+        };
+        let response = ureq::post(url)
+            .send_json(request)
+            .expect("Failed to send JSON to server")
+            .body_mut()
+            .read_json::<serde_json::Value>()
+            .expect("Failed to read JSON response");
+        response.to_string()
+    }
+
+    pub fn inspect_resource(
+        component_id: ComponentId,
+        settings: ResourceInspectionSettings,
+        url: &str,
+    ) -> String {
+        let request = BrpRequest {
+            jsonrpc: String::from("2.0"),
+            method: brp_methods::BRP_WORLD_INSPECT_RESOURCE_BY_ID_METHOD.to_string(),
+            id: None,
+            params: Some(
+                serde_json::to_value(BrpWorldInspectResourceByIdParams {
+                    component_id,
                     settings,
                 })
                 .expect("Unable to convert query parameters to a valid JSON value"),

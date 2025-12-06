@@ -26,6 +26,7 @@ use crate::{
         EntityInspectionError, EntityInspectionSettings, MultipleEntityInspectionSettings,
     },
     extension_methods::WorldInspectionExtensionTrait,
+    resource_inspection::{ResourceInspectionError, ResourceInspectionSettings},
 };
 
 pub const BRP_WORLD_INSPECT_METHOD: &str = "world.inspect";
@@ -178,7 +179,14 @@ pub struct BrpWorldInspectComponentByIdParams {
 pub struct BrpWorldInspectComponentByIdResponse;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BrpWorldInspectResourceByIdParams;
+pub struct BrpWorldInspectResourceByIdParams {
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "crate::serde_conversions::component_id")
+    )]
+    pub component_id: ComponentId,
+    pub settings: ResourceInspectionSettings,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectResourceByIdResponse;
@@ -292,11 +300,24 @@ pub fn process_remote_world_inspect_component_by_id_request(
 
 /// Handles a `world.inspect_resource_by_id` request coming from a client.
 pub fn process_remote_world_inspect_resource_by_id_request(
-    In(_params): In<Option<Value>>,
-    _world: &World,
+    In(params): In<Option<Value>>,
+    world: &World,
 ) -> BrpResult {
-    let response = "called `world.inspect_resource_by_id` handler successfully.";
-    serde_json::to_value(response).map_err(BrpError::internal)
+    let BrpWorldInspectResourceByIdParams {
+        component_id,
+        settings,
+    } = parse_some(params)?;
+    match world.inspect_resource_by_id(component_id, settings) {
+        Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
+        Err(error) => match error {
+            ResourceInspectionError::ResourceNotRegistered(type_name) => Err(
+                BrpError::resource_error(format!("Resource not registered: {type_name}")),
+            ),
+            ResourceInspectionError::ResourceNotFound(component_id) => Err(
+                BrpError::resource_not_present(&format!("Resource not found: {component_id:?}")),
+            ),
+        },
+    }
 }
 
 /// Handles a `world.inspect_all_resources` request coming from a client.
