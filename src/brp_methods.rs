@@ -27,6 +27,7 @@ use crate::{
     },
     extension_methods::WorldInspectionExtensionTrait,
     resource_inspection::{ResourceInspectionError, ResourceInspectionSettings},
+    summary::{SummarySettings, WorldSummaryExt},
 };
 
 pub const BRP_WORLD_INSPECT_METHOD: &str = "world.inspect";
@@ -37,6 +38,7 @@ pub const BRP_WORLD_INSPECT_RESOURCE_BY_ID_METHOD: &str = "world.inspect_resourc
 pub const BRP_WORLD_INSPECT_ALL_RESOURCES_METHOD: &str = "world.inspect_all_resources";
 pub const BRP_WORLD_INSPECT_COMPONENT_TYPE_BY_ID_METHOD: &str =
     "world.inspect_component_type_by_id";
+pub const BRP_WORLD_SUMMARIZE_METHOD: &str = "world.summarize";
 pub const BRP_COMPONENT_METADATA_MAP_GENERATE_METHOD: &str = "component_metadata_map.generate";
 
 /// A helper function used to parse a `serde_json::Value`.
@@ -88,6 +90,7 @@ impl Plugin for InspectorBrpPlugin {
             world.register_system(process_remote_world_inspect_all_resources_request);
         let world_inspect_component_type_by_id_id =
             world.register_system(process_remote_world_inspect_component_type_by_id_request);
+        let world_summarize_id = world.register_system(process_remote_world_summarize_request);
         let component_metadata_map_generate_id =
             world.register_system(process_remote_component_metadata_map_generate_request);
 
@@ -124,6 +127,10 @@ impl Plugin for InspectorBrpPlugin {
         remote_methods.insert(
             BRP_WORLD_INSPECT_COMPONENT_TYPE_BY_ID_METHOD,
             RemoteMethodSystemId::Instant(world_inspect_component_type_by_id_id),
+        );
+        remote_methods.insert(
+            BRP_WORLD_SUMMARIZE_METHOD,
+            RemoteMethodSystemId::Instant(world_summarize_id),
         );
         remote_methods.insert(
             BRP_COMPONENT_METADATA_MAP_GENERATE_METHOD,
@@ -198,6 +205,11 @@ pub struct BrpWorldInspectAllResourcesParams {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectAllResourcesResponse;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct BrpWorldSummarizeParams {
+    pub settings: SummarySettings,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectComponentTypeByIdParams {
@@ -364,6 +376,15 @@ pub fn process_remote_world_inspect_component_type_by_id_request(
             }
         },
     }
+}
+
+pub fn process_remote_world_summarize_request(
+    In(params): In<Option<Value>>,
+    world: &World,
+) -> BrpResult {
+    let BrpWorldSummarizeParams { settings } = parse_some(params)?;
+    let summary = world.summarize(settings);
+    serde_json::to_value(summary).map_err(BrpError::internal)
 }
 
 /// Handles a `component_metadata_map.generate` request coming from a client.

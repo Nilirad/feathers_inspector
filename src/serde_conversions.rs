@@ -36,6 +36,36 @@ pub mod component_id {
     }
 }
 
+/// Serde helper module to serialize [`ArchetypeId`] as its underlying integer index.
+///
+/// ## Usage
+///
+/// Add `#[serde(with = "crate::serde_conversions::archetype_id")]`
+/// to the struct's [`ArchetypeId`] field.
+///
+/// [`ArchetypeId`]: bevy::ecs::component::ArchetypeId
+pub mod archetype_id {
+    use bevy::ecs::archetype::ArchetypeId;
+    use serde::{Deserialize, Serialize};
+
+    /// Serializes a [`ComponentId`] into its index.
+    pub fn serialize<S>(id: &ArchetypeId, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        id.index().serialize(serializer)
+    }
+
+    /// Deserializes the index of a [`ComponentId`].
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<ArchetypeId, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let index = usize::deserialize(deserializer)?;
+        Ok(ArchetypeId::new(index))
+    }
+}
+
 /// Serde helper module to serialize a slice of [`ComponentId`]s as a `Vec` of indexes.
 ///
 /// ## Usage
@@ -96,7 +126,7 @@ pub mod debug_name {
         D: serde::Deserializer<'de>,
     {
         let name = String::deserialize(deserializer)?;
-        Ok(DebugName::owned(name))
+        Ok(DebugName::from(name))
     }
 }
 
@@ -180,6 +210,35 @@ pub mod hash_map_component_id_component_type_metadata {
             .map(|(key, value)| (ComponentId::new(key), value))
             .collect();
         Ok(component_id_to_metadata)
+    }
+}
+
+pub mod option_vec_debug_name {
+    use bevy::utils::prelude::DebugName;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &Option<Vec<DebugName>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(debug_names) => {
+                let strings: Vec<String> = debug_names
+                    .iter()
+                    .map(|debug_name| debug_name.to_string())
+                    .collect();
+                serializer.serialize_some(&strings)
+            }
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Vec<DebugName>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let opt_strings: Option<Vec<String>> = Option::deserialize(deserializer)?;
+        Ok(opt_strings.map(|strings| strings.into_iter().map(DebugName::from).collect()))
     }
 }
 

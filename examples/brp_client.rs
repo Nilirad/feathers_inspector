@@ -17,6 +17,7 @@ use feathers_inspector::entity_inspection::{
     EntityInspectionSettings, MultipleEntityInspectionSettings,
 };
 use feathers_inspector::resource_inspection::ResourceInspectionSettings;
+use feathers_inspector::summary::SummarySettings;
 
 use crate::helper::{inspect_component, inspect_multiple};
 
@@ -46,6 +47,7 @@ fn main() {
                 inspect_resource_when_r_pressed,
                 inspect_all_resources_when_a_pressed,
                 inspect_sprite_component_type_when_m_pressed,
+                summarize_when_s_pressed,
             ),
         )
         .run();
@@ -63,7 +65,8 @@ Press `Space` to inspect all entities
 Press 'C' to inspect the Sprite component on all Sprite entities
 Press 'R' to inspect the AmbientLight resource
 Press 'A' to inspect all resources
-Press 'M' to inspect the Sprite component type metadata"
+Press 'M' to inspect the Sprite component type metadata
+Press 'S' to obtain summary statistics"
         .to_string();
 
     commands.spawn((
@@ -177,6 +180,14 @@ fn inspect_sprite_component_type_when_m_pressed(
     }
 }
 
+fn summarize_when_s_pressed(keyboard_input: Res<ButtonInput<KeyCode>>, brp_url: Res<BrpUrl>) {
+    if keyboard_input.just_pressed(KeyCode::KeyS) {
+        let settings = SummarySettings::default();
+        let summary = helper::summarize(settings, &brp_url.0);
+        info!("{summary}");
+    }
+}
+
 // Since BRP request and response handling are quite verbose,
 // we define a helper module to contain the complexity.
 // TODO: Helpers should return concrete types instead of a JSON string,
@@ -188,10 +199,12 @@ mod helper {
             BrpWorldInspectAllResourcesParams, BrpWorldInspectCachedParams,
             BrpWorldInspectComponentByIdParams, BrpWorldInspectComponentTypeByIdParams,
             BrpWorldInspectMultipleParams, BrpWorldInspectResourceByIdParams,
+            BrpWorldSummarizeParams,
         },
         component_inspection::{ComponentMetadataMap, ComponentTypeMetadata},
         entity_inspection::MultipleEntityInspectionSettings,
         resource_inspection::ResourceInspectionSettings,
+        summary::SummarySettings,
     };
 
     use super::*;
@@ -458,6 +471,25 @@ mod helper {
             id: None,
             params: Some(
                 serde_json::to_value(BrpWorldInspectComponentTypeByIdParams { component_id })
+                    .expect("Unable to convert query parameters to a valid JSON value"),
+            ),
+        };
+        let response = ureq::post(url)
+            .send_json(request)
+            .expect("Failed to send JSON to server")
+            .body_mut()
+            .read_json::<serde_json::Value>()
+            .expect("Failed to read JSON response");
+        response.to_string()
+    }
+
+    pub fn summarize(settings: SummarySettings, url: &str) -> String {
+        let request = BrpRequest {
+            jsonrpc: String::from("2.0"),
+            method: brp_methods::BRP_WORLD_SUMMARIZE_METHOD.to_string(),
+            id: None,
+            params: Some(
+                serde_json::to_value(BrpWorldSummarizeParams { settings })
                     .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
