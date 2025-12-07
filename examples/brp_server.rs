@@ -11,9 +11,7 @@ use bevy::{
     prelude::*,
     remote::{RemotePlugin, http::RemoteHttpPlugin},
 };
-use feathers_inspector::{
-    brp_methods::InspectorBrpPlugin, entity_name_resolution::NameResolutionPlugin,
-};
+use feathers_inspector::{brp::InspectorBrpPlugin, entity_name_resolution::NameResolutionPlugin};
 
 fn main() {
     App::new()

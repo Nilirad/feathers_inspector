@@ -12,7 +12,7 @@
 
 pub mod archetype_similarity_grouping;
 #[cfg(feature = "remote")]
-pub mod brp_methods;
+pub mod brp;
 pub mod component_inspection;
 pub mod entity_grouping;
 pub mod entity_inspection;

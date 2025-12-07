@@ -11,7 +11,6 @@ use bevy::prelude::*;
 use bevy::remote::BrpRequest;
 use bevy::remote::builtin_methods::{BRP_QUERY_METHOD, BrpQuery, BrpQueryFilter, BrpQueryParams};
 use bevy::remote::http::{DEFAULT_ADDR, DEFAULT_PORT};
-use feathers_inspector::brp_methods::{self, BrpWorldInspectParams};
 use feathers_inspector::component_inspection::{ComponentDetailLevel, ComponentInspectionSettings};
 use feathers_inspector::entity_inspection::{
     EntityInspectionSettings, MultipleEntityInspectionSettings,
@@ -195,12 +194,7 @@ fn summarize_when_s_pressed(keyboard_input: Res<ButtonInput<KeyCode>>, brp_url: 
 mod helper {
     use bevy::ecs::component::ComponentId;
     use feathers_inspector::{
-        brp_methods::{
-            BrpWorldInspectAllResourcesParams, BrpWorldInspectCachedParams,
-            BrpWorldInspectComponentByIdParams, BrpWorldInspectComponentTypeByIdParams,
-            BrpWorldInspectMultipleParams, BrpWorldInspectResourceByIdParams,
-            BrpWorldSummarizeParams,
-        },
+        brp,
         component_inspection::{ComponentMetadataMap, ComponentTypeMetadata},
         entity_inspection::MultipleEntityInspectionSettings,
         resource_inspection::ResourceInspectionSettings,
@@ -280,10 +274,10 @@ mod helper {
     pub fn inspect_entity(entity: Entity, url: &str) -> String {
         let brp_request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_METHOD.to_string(),
+            method: brp::inspect::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectParams {
+                serde_json::to_value(brp::inspect::Params {
                     entity,
                     // TODO: Parametrize `EntityInspectionSettings`.
                     settings: EntityInspectionSettings {
@@ -314,10 +308,10 @@ mod helper {
     ) -> String {
         let brp_request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_CACHED_METHOD.to_string(),
+            method: brp::inspect_cached::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectCachedParams {
+                serde_json::to_value(brp::inspect_cached::Params {
                     entity,
                     // TODO: Parametrize `EntityInspectionSettings`.
                     settings: EntityInspectionSettings {
@@ -349,10 +343,10 @@ mod helper {
     ) -> String {
         let brp_request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_MULTIPLE_METHOD.to_string(),
+            method: brp::inspect_multiple::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectMultipleParams {
+                serde_json::to_value(brp::inspect_multiple::Params {
                     entities: entities.into_iter().collect::<Vec<Entity>>(),
                     settings,
                     metadata_map,
@@ -372,7 +366,7 @@ mod helper {
     pub fn generate_component_metadata(url: &str) -> ComponentMetadataMap {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_COMPONENT_METADATA_MAP_GENERATE_METHOD.to_string(),
+            method: brp::component_metadata_map_generate::METHOD.to_string(),
             id: None,
             params: None,
         };
@@ -398,10 +392,10 @@ mod helper {
     ) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_COMPONENT_BY_ID_METHOD.to_string(),
+            method: brp::inspect_component_by_id::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectComponentByIdParams {
+                serde_json::to_value(brp::inspect_component_by_id::Params {
                     component_id,
                     entity,
                     metadata: metadata.clone(),
@@ -426,10 +420,10 @@ mod helper {
     ) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_RESOURCE_BY_ID_METHOD.to_string(),
+            method: brp::inspect_resource_by_id::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectResourceByIdParams {
+                serde_json::to_value(brp::inspect_resource_by_id::Params {
                     component_id,
                     settings,
                 })
@@ -448,10 +442,10 @@ mod helper {
     pub fn inspect_all_resources(settings: ResourceInspectionSettings, url: &str) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_ALL_RESOURCES_METHOD.to_string(),
+            method: brp::inspect_all_resources::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectAllResourcesParams { settings })
+                serde_json::to_value(brp::inspect_all_resources::Params { settings })
                     .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
@@ -467,10 +461,10 @@ mod helper {
     pub fn inspect_component_type(component_id: ComponentId, url: &str) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_INSPECT_COMPONENT_TYPE_BY_ID_METHOD.to_string(),
+            method: brp::inspect_component_type_by_id::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldInspectComponentTypeByIdParams { component_id })
+                serde_json::to_value(brp::inspect_component_type_by_id::Params { component_id })
                     .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
@@ -486,10 +480,10 @@ mod helper {
     pub fn summarize(settings: SummarySettings, url: &str) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp_methods::BRP_WORLD_SUMMARIZE_METHOD.to_string(),
+            method: brp::summarize::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(BrpWorldSummarizeParams { settings })
+                serde_json::to_value(brp::summarize::Params { settings })
                     .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
