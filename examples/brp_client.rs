@@ -45,6 +45,7 @@ fn main() {
                 inspect_specific_component_when_c_pressed,
                 inspect_resource_when_r_pressed,
                 inspect_all_resources_when_a_pressed,
+                inspect_sprite_component_type_when_m_pressed,
             ),
         )
         .run();
@@ -61,7 +62,8 @@ Output will be shown in the console.
 Press `Space` to inspect all entities
 Press 'C' to inspect the Sprite component on all Sprite entities
 Press 'R' to inspect the AmbientLight resource
-Press 'A' to inspect all resources"
+Press 'A' to inspect all resources
+Press 'M' to inspect the Sprite component type metadata"
         .to_string();
 
     commands.spawn((
@@ -156,6 +158,25 @@ fn inspect_all_resources_when_a_pressed(
     }
 }
 
+fn inspect_sprite_component_type_when_m_pressed(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    brp_url: Res<BrpUrl>,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyM) {
+        let component_metadata = helper::generate_component_metadata(&brp_url.0);
+        let component_id = component_metadata
+            .map
+            .iter()
+            .find_map(|(id, meta)| {
+                let full = meta.name.to_string();
+                (full == SPRITE_COMPONENT_NAME).then_some(*id)
+            })
+            .expect("Sprite metadata not found in remote world");
+        let inspection = helper::inspect_component_type(component_id, &brp_url.0);
+        info!("{inspection}");
+    }
+}
+
 // Since BRP request and response handling are quite verbose,
 // we define a helper module to contain the complexity.
 // TODO: Helpers should return concrete types instead of a JSON string,
@@ -165,8 +186,8 @@ mod helper {
     use feathers_inspector::{
         brp_methods::{
             BrpWorldInspectAllResourcesParams, BrpWorldInspectCachedParams,
-            BrpWorldInspectComponentByIdParams, BrpWorldInspectMultipleParams,
-            BrpWorldInspectResourceByIdParams,
+            BrpWorldInspectComponentByIdParams, BrpWorldInspectComponentTypeByIdParams,
+            BrpWorldInspectMultipleParams, BrpWorldInspectResourceByIdParams,
         },
         component_inspection::{ComponentMetadataMap, ComponentTypeMetadata},
         entity_inspection::MultipleEntityInspectionSettings,
@@ -418,6 +439,25 @@ mod helper {
             id: None,
             params: Some(
                 serde_json::to_value(BrpWorldInspectAllResourcesParams { settings })
+                    .expect("Unable to convert query parameters to a valid JSON value"),
+            ),
+        };
+        let response = ureq::post(url)
+            .send_json(request)
+            .expect("Failed to send JSON to server")
+            .body_mut()
+            .read_json::<serde_json::Value>()
+            .expect("Failed to read JSON response");
+        response.to_string()
+    }
+
+    pub fn inspect_component_type(component_id: ComponentId, url: &str) -> String {
+        let request = BrpRequest {
+            jsonrpc: String::from("2.0"),
+            method: brp_methods::BRP_WORLD_INSPECT_COMPONENT_TYPE_BY_ID_METHOD.to_string(),
+            id: None,
+            params: Some(
+                serde_json::to_value(BrpWorldInspectComponentTypeByIdParams { component_id })
                     .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };

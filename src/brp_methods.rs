@@ -200,7 +200,13 @@ pub struct BrpWorldInspectAllResourcesParams {
 pub struct BrpWorldInspectAllResourcesResponse;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BrpWorldInspectComponentTypeByIdParams;
+pub struct BrpWorldInspectComponentTypeByIdParams {
+    #[cfg_attr(
+        feature = "serde",
+        serde(with = "crate::serde_conversions::component_id")
+    )]
+    pub component_id: ComponentId,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BrpWorldInspectComponentTypeByIdResponse;
@@ -334,11 +340,30 @@ pub fn process_remote_world_inspect_all_resources_request(
 
 /// Handles a `world.inspect_component_type_by_id` request coming from a client.
 pub fn process_remote_world_inspect_component_type_by_id_request(
-    In(_params): In<Option<Value>>,
-    _world: &World,
+    In(params): In<Option<Value>>,
+    world: &World,
 ) -> BrpResult {
-    let response = "called `world.inspect_component_type_by_id` handler successfully.";
-    serde_json::to_value(response).map_err(BrpError::internal)
+    let BrpWorldInspectComponentTypeByIdParams { component_id } = parse_some(params)?;
+    match world.inspect_component_type_by_id(component_id) {
+        Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
+        Err(error) => match error {
+            ComponentInspectionError::ComponentNotFound(component_id) => {
+                let component_index = component_id.index().to_string();
+                Err(BrpError::component_error(format!(
+                    "Component not found: {component_index}"
+                )))
+            }
+            ComponentInspectionError::ComponentNotRegistered(component_type_name) => Err(
+                BrpError::component_error(format!("Component not found: {component_type_name}")),
+            ),
+            ComponentInspectionError::ComponentIdNotRegistered(component_id) => {
+                let component_index = component_id.index().to_string();
+                Err(BrpError::component_error(format!(
+                    "Component not registered: {component_index}"
+                )))
+            }
+        },
+    }
 }
 
 /// Handles a `component_metadata_map.generate` request coming from a client.
