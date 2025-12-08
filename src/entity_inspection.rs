@@ -28,7 +28,7 @@ use crate::{
 
 /// The result of inspecting an entity.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EntityInspection {
     /// The entity being inspected.
     pub entity: Entity,
@@ -46,11 +46,8 @@ pub struct EntityInspection {
     /// The components on the entity, in inspection form.
     pub components: Option<Vec<ComponentInspection>>,
     /// Information about how this entity was spawned.
-    #[cfg_attr(
-        feature = "serde",
-        serde(serialize_with = "crate::serde_conversions::serialize_spawn_details")
-    )]
-    pub spawn_details: SpawnDetails,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub spawn_details: Option<SpawnDetails>,
 }
 
 impl Display for EntityInspection {
@@ -66,20 +63,22 @@ impl Display for EntityInspection {
             display_str.push_str(&format!("\nMemory Size: {}", total_size));
         }
 
-        let maybe_location = &self.spawn_details.spawned_by();
-        let tick = &self.spawn_details.spawn_tick();
+        if let Some(spawn_details) = self.spawn_details {
+            let maybe_location = &spawn_details.spawned_by();
+            let tick = spawn_details.spawn_tick();
 
-        if let Some(location) = maybe_location.into_option() {
-            display_str.push_str(&format!(
-                "\nSpawned by: {location} on system tick {}",
-                tick.get()
-            ));
-        } else {
-            warn_once!(
-                "Entity {:?} has no spawn location information available. Consider enabling \
-                 the `track_location` feature for better debugging.",
-                self.entity
-            );
+            if let Some(location) = maybe_location.into_option() {
+                display_str.push_str(&format!(
+                    "\nSpawned by: {location} on system tick {}",
+                    tick.get()
+                ));
+            } else {
+                warn_once!(
+                    "Entity {:?} has no spawn location information available. Consider enabling \
+                     the `track_location` feature for better debugging.",
+                    self.entity
+                );
+            }
         }
 
         if let Some(components) = &self.components {
