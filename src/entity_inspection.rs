@@ -95,22 +95,16 @@ impl Display for EntityInspection {
 
 /// An error that can occur when attempting to inspect an entity.
 #[derive(Debug, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EntityInspectionError {
     /// The entity does not exist in the world.
     #[error("Entity not found: {0}")]
-    #[cfg_attr(
-        feature = "serde",
-        serde(serialize_with = "crate::serde_conversions::serialize_entity_does_not_exist_error")
-    )]
+    #[cfg_attr(feature = "serde", serde(skip))]
     EntityNotFound(EntityDoesNotExistError),
     /// A catch-all variant for inspection errors that should never happen
     /// when just querying an entity and its metadata.
     #[error("Unexpected QueryEntityError: {0}")]
-    #[cfg_attr(
-        feature = "serde",
-        serde(serialize_with = "crate::serde_conversions::serialize_query_entity_error")
-    )]
+    #[cfg_attr(feature = "serde", serde(skip))]
     UnexpectedQueryError(QueryEntityError),
 }
 

@@ -98,8 +98,14 @@ fn inspect_all_entities_when_space_pressed(
             },
             ..default()
         };
-        let inspection = inspect_multiple(entities, settings, component_metadata, &brp_url.0);
-        info!("{inspection}");
+        let inspections = inspect_multiple(entities, settings, component_metadata, &brp_url.0);
+        for result in inspections {
+            if let Ok(inspection) = result {
+                info!("{inspection}");
+            } else {
+                warn!("Could not inspect an entity")
+            }
+        }
     }
 }
 
@@ -159,7 +165,9 @@ fn inspect_all_resources_when_a_pressed(
             full_type_names: false,
         };
         let inspections = helper::inspect_all_resources(settings, &brp_url.0);
-        info!("{inspections}");
+        for inspection in inspections {
+            info!("{inspection}");
+        }
     }
 }
 
@@ -188,9 +196,15 @@ fn summarize_when_s_pressed(keyboard_input: Res<ButtonInput<KeyCode>>, brp_url: 
 //       just like `generate_component_metadata` does.
 mod helper {
     use feathers_inspector::{
-        brp, component_inspection::ComponentMetadataMap,
-        entity_inspection::MultipleEntityInspectionSettings,
-        resource_inspection::ResourceInspectionSettings, summary::SummarySettings,
+        brp,
+        component_inspection::{
+            ComponentInspection, ComponentMetadataMap, ComponentTypeInspection,
+        },
+        entity_inspection::{
+            EntityInspection, EntityInspectionError, MultipleEntityInspectionSettings,
+        },
+        resource_inspection::{ResourceInspection, ResourceInspectionSettings},
+        summary::{SummarySettings, WorldSummary},
     };
 
     use super::*;
@@ -224,7 +238,11 @@ mod helper {
     }
 
     #[allow(dead_code)]
-    pub fn inspect_entity(entity: Entity, settings: EntityInspectionSettings, url: &str) -> String {
+    pub fn inspect_entity(
+        entity: Entity,
+        settings: EntityInspectionSettings,
+        url: &str,
+    ) -> EntityInspection {
         let brp_request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect::METHOD.to_string(),
@@ -240,7 +258,11 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<EntityInspection>(result.clone())
+            .expect("Failed to deserialize `EntityInspection`")
     }
 
     #[allow(dead_code)]
@@ -249,7 +271,7 @@ mod helper {
         metadata_map: &ComponentMetadataMap,
         settings: EntityInspectionSettings,
         url: &str,
-    ) -> String {
+    ) -> EntityInspection {
         let brp_request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect_cached::METHOD.to_string(),
@@ -269,7 +291,11 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<EntityInspection>(result.clone())
+            .expect("Failed to deserialize `EntityInspection`")
     }
 
     pub fn inspect_multiple(
@@ -277,7 +303,7 @@ mod helper {
         settings: MultipleEntityInspectionSettings,
         metadata_map: ComponentMetadataMap,
         url: &str,
-    ) -> String {
+    ) -> Vec<Result<EntityInspection, EntityInspectionError>> {
         let brp_request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect_multiple::METHOD.to_string(),
@@ -297,7 +323,13 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<Vec<Result<EntityInspection, EntityInspectionError>>>(
+            result.clone(),
+        )
+        .expect("Failed to deserialize `Vec<Result<EntityInspection, EntityInspectionError>>`")
     }
 
     pub fn generate_component_metadata_map(url: &str) -> ComponentMetadataMap {
@@ -315,7 +347,7 @@ mod helper {
             .expect("Failed to read JSON response");
         let result = response
             .get("result")
-            .expect("Missing 'result' field in JSON-RPC response");
+            .expect("Missing `result` field in JSON-RPC response");
         serde_json::from_value::<ComponentMetadataMap>(result.clone())
             .expect("Failed to deserialize `ComponentMetadataMap`")
     }
@@ -325,7 +357,7 @@ mod helper {
         entity: Entity,
         settings: ComponentInspectionSettings,
         url: &str,
-    ) -> String {
+    ) -> ComponentInspection {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect_component::METHOD.to_string(),
@@ -346,14 +378,18 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<ComponentInspection>(result.clone())
+            .expect("Failed to deserialize `ComponentInspection`")
     }
 
     pub fn inspect_resource(
         component_type: String,
         settings: ResourceInspectionSettings,
         url: &str,
-    ) -> String {
+    ) -> ResourceInspection {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect_resource::METHOD.to_string(),
@@ -373,10 +409,17 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<ResourceInspection>(result.clone())
+            .expect("Failed to deserialize `ResourceInspection`")
     }
 
-    pub fn inspect_all_resources(settings: ResourceInspectionSettings, url: &str) -> String {
+    pub fn inspect_all_resources(
+        settings: ResourceInspectionSettings,
+        url: &str,
+    ) -> Vec<ResourceInspection> {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect_all_resources::METHOD.to_string(),
@@ -392,10 +435,14 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<Vec<ResourceInspection>>(result.clone())
+            .expect("Failed to deserialize `Vec<ResourceInspection>`")
     }
 
-    pub fn inspect_component_type(component_type: String, url: &str) -> String {
+    pub fn inspect_component_type(component_type: String, url: &str) -> ComponentTypeInspection {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect_component_type::METHOD.to_string(),
@@ -414,10 +461,14 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<ComponentTypeInspection>(result.clone())
+            .expect("Failed to deserialize `ComponentTypeInspection`")
     }
 
-    pub fn summarize(settings: SummarySettings, url: &str) -> String {
+    pub fn summarize(settings: SummarySettings, url: &str) -> WorldSummary {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::summarize::METHOD.to_string(),
@@ -433,6 +484,10 @@ mod helper {
             .body_mut()
             .read_json::<serde_json::Value>()
             .expect("Failed to read JSON response");
-        response.to_string()
+        let result = response
+            .get("result")
+            .expect("Missing `result` field in JSON-RPC response");
+        serde_json::from_value::<WorldSummary>(result.clone())
+            .expect("Failed to deserialize `WorldSummary`")
     }
 }
