@@ -11,20 +11,23 @@
 //! to understand the names of the registered methods.
 
 use bevy::{
+    ecs::component::ComponentId,
     prelude::*,
     remote::{BrpError, error_codes},
 };
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::component_inspection::{ComponentMetadataMap, ComponentTypeMetadata};
+
 pub mod component_metadata_map_generate;
 pub mod inspect;
 pub mod inspect_all_resources;
 pub mod inspect_cached;
-pub mod inspect_component_by_id;
-pub mod inspect_component_type_by_id;
+pub mod inspect_component;
+pub mod inspect_component_type;
 pub mod inspect_multiple;
-pub mod inspect_resource_by_id;
+pub mod inspect_resource;
 pub mod summarize;
 
 /// Provides BRP verbs for calling functions and methods defined in this crate.
@@ -44,10 +47,10 @@ impl Plugin for InspectorBrpPlugin {
             inspect::VerbPlugin,
             inspect_all_resources::VerbPlugin,
             inspect_cached::VerbPlugin,
-            inspect_component_by_id::VerbPlugin,
-            inspect_component_type_by_id::VerbPlugin,
+            inspect_component::VerbPlugin,
+            inspect_component_type::VerbPlugin,
             inspect_multiple::VerbPlugin,
-            inspect_resource_by_id::VerbPlugin,
+            inspect_resource::VerbPlugin,
             summarize::VerbPlugin,
         ));
     }
@@ -76,4 +79,15 @@ fn parse_some<T: for<'de> Deserialize<'de>>(value: Option<Value>) -> Result<T, B
             data: None,
         }),
     }
+}
+
+/// Returns a [`ComponentMetadataMap`] entry
+pub fn component_type_to_metadata<'metadata>(
+    component_type: &str,
+    metadata_map: &'metadata ComponentMetadataMap,
+) -> Option<(ComponentId, &'metadata ComponentTypeMetadata)> {
+    metadata_map.map.iter().find_map(|(id, meta)| {
+        let full = meta.name.to_string();
+        (full == component_type).then_some((*id, meta))
+    })
 }

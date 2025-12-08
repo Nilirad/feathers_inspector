@@ -85,7 +85,7 @@ fn inspect_all_entities_when_space_pressed(
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
         let entities = helper::query_all_entities(&brp_url.0);
-        let component_metadata = helper::generate_component_metadata(&brp_url.0);
+        let component_metadata = helper::generate_component_metadata_map(&brp_url.0);
         let settings = MultipleEntityInspectionSettings {
             entity_settings: EntityInspectionSettings {
                 include_components: false,
@@ -108,18 +108,13 @@ fn inspect_specific_component_when_c_pressed(
             detail_level: ComponentDetailLevel::Values,
             full_type_names: true,
         };
-        let component_metadata = helper::generate_component_metadata(&brp_url.0);
-        let (component_id, sprite_metadata) = component_metadata
-            .map
-            .iter()
-            .find_map(|(id, meta)| {
-                let full = meta.name.to_string();
-                (full == SPRITE_COMPONENT_NAME).then_some((*id, meta))
-            })
-            .expect("Sprite metadata not found in remote world");
         for entity in entities {
-            let inspection =
-                inspect_component(component_id, entity, sprite_metadata, settings, &brp_url.0);
+            let inspection = inspect_component(
+                SPRITE_COMPONENT_NAME.to_string(),
+                entity,
+                settings,
+                &brp_url.0,
+            );
             info!("{inspection}");
         }
     }
@@ -130,19 +125,14 @@ fn inspect_resource_when_r_pressed(
     brp_url: Res<BrpUrl>,
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyR) {
-        let component_metadata = helper::generate_component_metadata(&brp_url.0);
         let settings = ResourceInspectionSettings {
             full_type_names: true,
         };
-        let component_id = component_metadata
-            .map
-            .iter()
-            .find_map(|(id, meta)| {
-                let full = meta.name.to_string();
-                (full == AMBIENT_LIGHT_COMPONENT_NAME).then_some(*id)
-            })
-            .expect("`AmbientLight` metadata not found in remote world");
-        let inspection = helper::inspect_resource(component_id, settings, &brp_url.0);
+        let inspection = helper::inspect_resource(
+            AMBIENT_LIGHT_COMPONENT_NAME.to_string(),
+            settings,
+            &brp_url.0,
+        );
         info!("{inspection}");
     }
 }
@@ -165,16 +155,8 @@ fn inspect_sprite_component_type_when_m_pressed(
     brp_url: Res<BrpUrl>,
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyM) {
-        let component_metadata = helper::generate_component_metadata(&brp_url.0);
-        let component_id = component_metadata
-            .map
-            .iter()
-            .find_map(|(id, meta)| {
-                let full = meta.name.to_string();
-                (full == SPRITE_COMPONENT_NAME).then_some(*id)
-            })
-            .expect("Sprite metadata not found in remote world");
-        let inspection = helper::inspect_component_type(component_id, &brp_url.0);
+        let inspection =
+            helper::inspect_component_type(SPRITE_COMPONENT_NAME.to_string(), &brp_url.0);
         info!("{inspection}");
     }
 }
@@ -192,13 +174,10 @@ fn summarize_when_s_pressed(keyboard_input: Res<ButtonInput<KeyCode>>, brp_url: 
 // TODO: Helpers should return concrete types instead of a JSON string,
 //       just like `generate_component_metadata` does.
 mod helper {
-    use bevy::ecs::component::ComponentId;
     use feathers_inspector::{
-        brp,
-        component_inspection::{ComponentMetadataMap, ComponentTypeMetadata},
+        brp, component_inspection::ComponentMetadataMap,
         entity_inspection::MultipleEntityInspectionSettings,
-        resource_inspection::ResourceInspectionSettings,
-        summary::SummarySettings,
+        resource_inspection::ResourceInspectionSettings, summary::SummarySettings,
     };
 
     use super::*;
@@ -363,7 +342,7 @@ mod helper {
         response.to_string()
     }
 
-    pub fn generate_component_metadata(url: &str) -> ComponentMetadataMap {
+    pub fn generate_component_metadata_map(url: &str) -> ComponentMetadataMap {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::component_metadata_map_generate::METHOD.to_string(),
@@ -384,22 +363,21 @@ mod helper {
     }
 
     pub fn inspect_component(
-        component_id: ComponentId,
+        component_type: String,
         entity: Entity,
-        metadata: &ComponentTypeMetadata,
         settings: ComponentInspectionSettings,
         url: &str,
     ) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp::inspect_component_by_id::METHOD.to_string(),
+            method: brp::inspect_component::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(brp::inspect_component_by_id::Params {
-                    component_id,
+                serde_json::to_value(brp::inspect_component::Params {
+                    component_type,
                     entity,
-                    metadata: metadata.clone(),
                     settings,
+                    metadata_map: None,
                 })
                 .expect("Unable to convert query parameters to a valid JSON value"),
             ),
@@ -414,18 +392,19 @@ mod helper {
     }
 
     pub fn inspect_resource(
-        component_id: ComponentId,
+        component_type: String,
         settings: ResourceInspectionSettings,
         url: &str,
     ) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp::inspect_resource_by_id::METHOD.to_string(),
+            method: brp::inspect_resource::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(brp::inspect_resource_by_id::Params {
-                    component_id,
+                serde_json::to_value(brp::inspect_resource::Params {
+                    component_type,
                     settings,
+                    metadata_map: None,
                 })
                 .expect("Unable to convert query parameters to a valid JSON value"),
             ),
@@ -458,14 +437,17 @@ mod helper {
         response.to_string()
     }
 
-    pub fn inspect_component_type(component_id: ComponentId, url: &str) -> String {
+    pub fn inspect_component_type(component_type: String, url: &str) -> String {
         let request = BrpRequest {
             jsonrpc: String::from("2.0"),
-            method: brp::inspect_component_type_by_id::METHOD.to_string(),
+            method: brp::inspect_component_type::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(brp::inspect_component_type_by_id::Params { component_id })
-                    .expect("Unable to convert query parameters to a valid JSON value"),
+                serde_json::to_value(brp::inspect_component_type::Params {
+                    component_type,
+                    metadata_map: None,
+                })
+                .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
         let response = ureq::post(url)

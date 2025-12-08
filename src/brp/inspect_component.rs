@@ -1,5 +1,4 @@
 use bevy::{
-    ecs::component::ComponentId,
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
 };
@@ -8,12 +7,12 @@ use serde_json::Value;
 
 use crate::{
     component_inspection::{
-        ComponentInspectionError, ComponentInspectionSettings, ComponentTypeMetadata,
+        ComponentInspectionError, ComponentInspectionSettings, ComponentMetadataMap,
     },
     extension_methods::WorldInspectionExtensionTrait,
 };
 
-pub const METHOD: &str = "world.inspect_component_by_id";
+pub const METHOD: &str = "world.inspect_component";
 
 pub(crate) struct VerbPlugin;
 
@@ -30,37 +29,42 @@ impl Plugin for VerbPlugin {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Params {
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "crate::serde_conversions::component_id")
-    )]
-    pub component_id: ComponentId,
+    pub component_type: String,
     pub entity: Entity,
-    pub metadata: ComponentTypeMetadata,
     pub settings: ComponentInspectionSettings,
+    pub metadata_map: Option<ComponentMetadataMap>,
 }
 
-/// Handles a `world.inspect_component_by_id` request coming from a client.
+/// Handles a `world.inspect_component` request coming from a client.
 pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> BrpResult {
     let Params {
-        component_id,
+        component_type,
         entity,
-        metadata,
         settings,
+        metadata_map,
     } = super::parse_some(params)?;
-    match world.inspect_component_by_id(component_id, entity, &metadata, settings) {
+    let metadata_map = metadata_map.unwrap_or(ComponentMetadataMap::generate(world));
+    let Some((component_id, metadata)) =
+        super::component_type_to_metadata(&component_type, &metadata_map)
+    else {
+        return Err(BrpError::component_error(
+            "Component not found in metadata: `{component_type}`",
+        ));
+    };
+    match world.inspect_component_by_id(component_id, entity, metadata, settings) {
         Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
         Err(error) => match error {
-            // TODO: Use component name instead of index.
-            ComponentInspectionError::ComponentNotFound(component_id) => Err(
-                BrpError::component_not_present(&component_id.index().to_string(), entity),
-            ),
+            ComponentInspectionError::ComponentNotFound(_) => {
+                Err(BrpError::component_not_present(&component_type, entity))
+            }
             ComponentInspectionError::ComponentNotRegistered(component_name) => Err(
-                BrpError::component_error(format!("Component not registered: {component_name}")),
+                BrpError::component_error(format!("Component not registered: `{component_name}`")),
             ),
-            ComponentInspectionError::ComponentIdNotRegistered(component_id) => Err(
-                BrpError::component_error(format!("Component id not registered: {component_id:?}")),
-            ),
+            ComponentInspectionError::ComponentIdNotRegistered(component_id) => {
+                Err(BrpError::component_error(format!(
+                    "Component id not registered: `{component_id:?}`"
+                )))
+            }
         },
     }
 }

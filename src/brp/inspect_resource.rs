@@ -1,5 +1,4 @@
 use bevy::{
-    ecs::component::ComponentId,
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
 };
@@ -7,11 +6,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
+    component_inspection::ComponentMetadataMap,
     extension_methods::WorldInspectionExtensionTrait,
     resource_inspection::{ResourceInspectionError, ResourceInspectionSettings},
 };
 
-pub const METHOD: &str = "world.inspect_resource_by_id";
+pub const METHOD: &str = "world.inspect_resource";
 
 pub(crate) struct VerbPlugin;
 
@@ -26,22 +26,27 @@ impl Plugin for VerbPlugin {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Params {
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "crate::serde_conversions::component_id")
-    )]
-    pub component_id: ComponentId,
+    pub component_type: String,
     pub settings: ResourceInspectionSettings,
+    pub metadata_map: Option<ComponentMetadataMap>,
 }
 
 /// Handles a `world.inspect_resource_by_id` request coming from a client.
 pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> BrpResult {
     let Params {
-        component_id,
+        component_type,
         settings,
+        metadata_map,
     } = super::parse_some(params)?;
+    let metadata_map = metadata_map.unwrap_or(ComponentMetadataMap::generate(world));
+    let Some((component_id, _)) = super::component_type_to_metadata(&component_type, &metadata_map)
+    else {
+        return Err(BrpError::component_error(
+            "Component not found in metadata: `{component_type}`",
+        ));
+    };
     match world.inspect_resource_by_id(component_id, settings) {
         Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
         Err(error) => match error {
