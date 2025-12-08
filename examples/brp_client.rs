@@ -84,7 +84,12 @@ fn inspect_all_entities_when_space_pressed(
     brp_url: Res<BrpUrl>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
-        let entities = helper::query_all_entities(&brp_url.0);
+        let query_params = BrpQueryParams {
+            data: BrpQuery::default(),
+            filter: BrpQueryFilter::default(),
+            strict: false,
+        };
+        let entities = helper::query(query_params, &brp_url.0);
         let component_metadata = helper::generate_component_metadata_map(&brp_url.0);
         let settings = MultipleEntityInspectionSettings {
             entity_settings: EntityInspectionSettings {
@@ -103,7 +108,15 @@ fn inspect_specific_component_when_c_pressed(
     brp_url: Res<BrpUrl>,
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyC) {
-        let entities = helper::query_sprite_entities(&brp_url.0);
+        let query_params = BrpQueryParams {
+            data: BrpQuery::default(),
+            filter: BrpQueryFilter {
+                with: vec![SPRITE_COMPONENT_NAME.to_string()],
+                ..default()
+            },
+            strict: false,
+        };
+        let entities = helper::query(query_params, &brp_url.0);
         let settings = ComponentInspectionSettings {
             detail_level: ComponentDetailLevel::Values,
             full_type_names: true,
@@ -182,53 +195,14 @@ mod helper {
 
     use super::*;
 
-    pub fn query_all_entities(url: &str) -> Vec<Entity> {
+    pub fn query(params: BrpQueryParams, url: &str) -> Vec<Entity> {
         let query_entities_request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: String::from(BRP_QUERY_METHOD),
             id: None,
             params: Some(
-                serde_json::to_value(BrpQueryParams {
-                    data: BrpQuery::default(),
-                    filter: BrpQueryFilter::default(),
-                    strict: false,
-                })
-                .expect("Unable to convert query parameters to a valid JSON value"),
-            ),
-        };
-        let response = ureq::post(url)
-            .send_json(query_entities_request)
-            .expect("Failed to send JSON to server")
-            .body_mut()
-            .read_json::<serde_json::Value>()
-            .expect("Failed to read JSON response");
-        response["result"]
-            .as_array()
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|item| item["entity"].as_u64())
-                    .map(Entity::from_bits)
-                    .collect::<Vec<Entity>>()
-            })
-            .unwrap_or_default()
-    }
-
-    pub fn query_sprite_entities(url: &str) -> Vec<Entity> {
-        let query_entities_request = BrpRequest {
-            jsonrpc: String::from("2.0"),
-            method: String::from(BRP_QUERY_METHOD),
-            id: None,
-            params: Some(
-                serde_json::to_value(BrpQueryParams {
-                    data: BrpQuery::default(),
-                    filter: BrpQueryFilter {
-                        with: vec![SPRITE_COMPONENT_NAME.to_string()],
-                        ..default()
-                    },
-                    strict: false,
-                })
-                .expect("Unable to convert query parameters to a valid JSON value"),
+                serde_json::to_value(params)
+                    .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
         let response = ureq::post(url)
@@ -250,24 +224,14 @@ mod helper {
     }
 
     #[allow(dead_code)]
-    pub fn inspect_entity(entity: Entity, url: &str) -> String {
+    pub fn inspect_entity(entity: Entity, settings: EntityInspectionSettings, url: &str) -> String {
         let brp_request = BrpRequest {
             jsonrpc: String::from("2.0"),
             method: brp::inspect::METHOD.to_string(),
             id: None,
             params: Some(
-                serde_json::to_value(brp::inspect::Params {
-                    entity,
-                    // TODO: Parametrize `EntityInspectionSettings`.
-                    settings: EntityInspectionSettings {
-                        include_components: false,
-                        component_settings: ComponentInspectionSettings {
-                            detail_level: ComponentDetailLevel::Values,
-                            full_type_names: true,
-                        },
-                    },
-                })
-                .expect("Unable to convert query parameters to a valid JSON value"),
+                serde_json::to_value(brp::inspect::Params { entity, settings })
+                    .expect("Unable to convert query parameters to a valid JSON value"),
             ),
         };
         let response = ureq::post(url)
@@ -283,6 +247,7 @@ mod helper {
     pub fn inspect_entity_cached(
         entity: Entity,
         metadata_map: &ComponentMetadataMap,
+        settings: EntityInspectionSettings,
         url: &str,
     ) -> String {
         let brp_request = BrpRequest {
@@ -292,14 +257,7 @@ mod helper {
             params: Some(
                 serde_json::to_value(brp::inspect_cached::Params {
                     entity,
-                    // TODO: Parametrize `EntityInspectionSettings`.
-                    settings: EntityInspectionSettings {
-                        include_components: false,
-                        component_settings: ComponentInspectionSettings {
-                            detail_level: ComponentDetailLevel::Values,
-                            full_type_names: true,
-                        },
-                    },
+                    settings,
                     metadata_map: metadata_map.clone(),
                 })
                 .expect("Unable to convert query parameters to a valid JSON value"),
