@@ -49,13 +49,18 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
     };
     match world.inspect_resource_by_id(component_id, settings) {
         Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
-        Err(error) => match error {
-            ResourceInspectionError::ResourceNotRegistered(type_name) => Err(
-                BrpError::resource_error(format!("Resource not registered: {type_name}")),
-            ),
-            ResourceInspectionError::ResourceNotFound(component_id) => Err(
-                BrpError::resource_not_present(&format!("Resource not found: {component_id:?}")),
-            ),
-        },
+        Err(error) => Err(determine_error(error)),
+    }
+}
+
+fn determine_error(error: ResourceInspectionError) -> BrpError {
+    use ResourceInspectionError::*;
+    match error {
+        ResourceNotRegistered(type_name) => {
+            BrpError::resource_error(format!("Resource not registered: {type_name}"))
+        }
+        ResourceNotFound(component_id) => {
+            BrpError::resource_not_present(&format!("Resource not found: {component_id:?}"))
+        }
     }
 }

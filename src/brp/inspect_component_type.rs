@@ -46,24 +46,23 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
     };
     match world.inspect_component_type_by_id(component_id) {
         Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
-        Err(error) => match error {
-            ComponentInspectionError::ComponentNotFound(component_id) => {
-                let component_index = component_id.index().to_string();
-                Err(BrpError::component_error(format!(
-                    "Component not found: {component_index}"
-                )))
-            }
-            ComponentInspectionError::ComponentNotRegistered(component_type_name) => {
-                Err(BrpError::component_error(format!(
-                    "Component not registered: {component_type_name}"
-                )))
-            }
-            ComponentInspectionError::ComponentIdNotRegistered(component_id) => {
-                let component_index = component_id.index().to_string();
-                Err(BrpError::component_error(format!(
-                    "Component not registered: {component_index}"
-                )))
-            }
-        },
+        Err(error) => Err(determine_error(error)),
+    }
+}
+
+fn determine_error(error: ComponentInspectionError) -> BrpError {
+    use ComponentInspectionError::*;
+    match error {
+        ComponentNotFound(component_id) => {
+            let component_index = component_id.index().to_string();
+            BrpError::component_error(format!("Component not found: {component_index}"))
+        }
+        ComponentNotRegistered(component_type_name) => {
+            BrpError::component_error(format!("Component not registered: {component_type_name}"))
+        }
+        ComponentIdNotRegistered(component_id) => {
+            let component_index = component_id.index().to_string();
+            BrpError::component_error(format!("Component not registered: {component_index}"))
+        }
     }
 }

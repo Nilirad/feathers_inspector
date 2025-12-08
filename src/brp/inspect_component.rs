@@ -53,18 +53,24 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
     };
     match world.inspect_component_by_id(component_id, entity, metadata, settings) {
         Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),
-        Err(error) => match error {
-            ComponentInspectionError::ComponentNotFound(_) => {
-                Err(BrpError::component_not_present(&component_type, entity))
-            }
-            ComponentInspectionError::ComponentNotRegistered(component_name) => Err(
-                BrpError::component_error(format!("Component not registered: `{component_name}`")),
-            ),
-            ComponentInspectionError::ComponentIdNotRegistered(component_id) => {
-                Err(BrpError::component_error(format!(
-                    "Component id not registered: `{component_id:?}`"
-                )))
-            }
-        },
+        Err(error) => Err(determine_error(component_type, entity, error)),
+    }
+}
+
+fn determine_error(
+    component_type: String,
+    entity: Entity,
+    error: ComponentInspectionError,
+) -> BrpError {
+    match error {
+        ComponentInspectionError::ComponentNotFound(_) => {
+            BrpError::component_not_present(&component_type, entity)
+        }
+        ComponentInspectionError::ComponentNotRegistered(component_name) => {
+            BrpError::component_error(format!("Component not registered: `{component_name}`"))
+        }
+        ComponentInspectionError::ComponentIdNotRegistered(component_id) => {
+            BrpError::component_error(format!("Component id not registered: `{component_id:?}`"))
+        }
     }
 }
