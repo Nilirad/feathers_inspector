@@ -1,3 +1,4 @@
+//! Handles a `world.inspect` request coming from a client.
 use bevy::{
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
@@ -31,7 +32,6 @@ pub struct Params {
     pub settings: EntityInspectionSettings,
 }
 
-/// Handles a `world.inspect` request coming from a client.
 pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> BrpResult {
     let Params { entity, settings } = super::parse_some(params)?;
     let entity_inspection = world.inspect(entity, settings);

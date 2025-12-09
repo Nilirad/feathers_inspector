@@ -1,3 +1,4 @@
+//! Handles a `component_metadata_map.generate` request coming from a client.
 use bevy::{
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
@@ -21,7 +22,6 @@ impl Plugin for VerbPlugin {
     }
 }
 
-/// Handles a `component_metadata_map.generate` request coming from a client.
 pub fn process_remote_request(In(_params): In<Option<Value>>, world: &World) -> BrpResult {
     let metadata_map = ComponentMetadataMap::generate(world);
     serde_json::to_value(metadata_map).map_err(BrpError::internal)

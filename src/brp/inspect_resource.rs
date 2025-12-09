@@ -1,3 +1,4 @@
+//! Handles a `world.inspect_resource` request coming from a client.
 use bevy::{
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
@@ -33,7 +34,6 @@ pub struct Params {
     pub metadata_map: Option<ComponentMetadataMap>,
 }
 
-/// Handles a `world.inspect_resource_by_id` request coming from a client.
 pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> BrpResult {
     let Params {
         component_type,

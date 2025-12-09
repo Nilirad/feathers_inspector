@@ -1,3 +1,4 @@
+//! Handles a `world.summarize` request coming from a client.
 use bevy::{
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},

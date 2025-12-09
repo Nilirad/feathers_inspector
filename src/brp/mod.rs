@@ -7,8 +7,7 @@
 //! Then, register the custom methods by adding the [`InspectorBrpPlugin`].
 //! Now you can send inspector requests via BRP to your app and get a response.
 //!
-//! Refer to the constants defined in this module
-//! to understand the names of the registered methods.
+//! Refer to the submodules to learn more about the handlers.
 
 use bevy::{ecs::component::ComponentId, prelude::*, remote::BrpError};
 use serde::Deserialize;

@@ -1,3 +1,4 @@
+//! Handles a `world.inspect_cached` request coming from a client.
 use bevy::{
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
@@ -33,7 +34,6 @@ pub struct Params {
     pub metadata_map: ComponentMetadataMap,
 }
 
-/// Handles a `world.inspect_cached` request coming from a client.
 pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> BrpResult {
     let Params {
         entity,

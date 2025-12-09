@@ -1,3 +1,4 @@
+//! Handles a `world.inspect_all_resources` request coming from a client.
 use bevy::{
     prelude::*,
     remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
@@ -30,7 +31,6 @@ pub struct Params {
     pub settings: ResourceInspectionSettings,
 }
 
-/// Handles a `world.inspect_all_resources` request coming from a client.
 pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> BrpResult {
     let Params { settings } = super::parse_some(params)?;
     let inspection = world.inspect_all_resources(settings);
