@@ -43,12 +43,12 @@ pub mod component_id {
 /// Add `#[serde(with = "crate::serde_conversions::archetype_id")]`
 /// to the struct's [`ArchetypeId`] field.
 ///
-/// [`ArchetypeId`]: bevy::ecs::component::ArchetypeId
+/// [`ArchetypeId`]: bevy::ecs::archetype::ArchetypeId
 pub mod archetype_id {
     use bevy::ecs::archetype::ArchetypeId;
     use serde::{Deserialize, Serialize};
 
-    /// Serializes a [`ComponentId`] into its index.
+    /// Serializes an [`ArchetypeId`] into its index.
     pub fn serialize<S>(id: &ArchetypeId, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -56,7 +56,7 @@ pub mod archetype_id {
         id.index().serialize(serializer)
     }
 
-    /// Deserializes the index of a [`ComponentId`].
+    /// Deserializes the index of an [`ArchetypeId`].
     pub fn deserialize<'de, D>(deserializer: D) -> Result<ArchetypeId, D::Error>
     where
         D: serde::Deserializer<'de>,
