@@ -22,7 +22,7 @@ impl Plugin for VerbPlugin {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Params {
     pub settings: ResourceInspectionSettings,
 }

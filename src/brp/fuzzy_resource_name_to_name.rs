@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    brp::fuzzy_component_name_to_name::no_fuzzy_match_brp_error,
     component_inspection::ComponentMetadataMap, fuzzy_name_mapping::fuzzy_resource_name_to_id,
 };
 
@@ -46,6 +45,6 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
             Ok(serde_json::to_value(component_metadata.name.to_string())
                 .map_err(BrpError::internal)?)
         }
-        None => Err(no_fuzzy_match_brp_error(&fuzzy_name)),
+        None => Err(super::no_fuzzy_name_candidates_brp_error(&fuzzy_name)),
     }
 }

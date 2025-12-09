@@ -45,14 +45,6 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
             Ok(serde_json::to_value(component_metadata.name.to_string())
                 .map_err(BrpError::internal)?)
         }
-        None => Err(no_fuzzy_match_brp_error(&fuzzy_name)),
-    }
-}
-
-pub(super) fn no_fuzzy_match_brp_error(fuzzy_name: &str) -> BrpError {
-    BrpError {
-        code: super::error_codes::FUZZY_NAME_MATCH_FAIL,
-        message: format!("No match found for fuzzy name \"{fuzzy_name}\""),
-        data: None,
+        None => Err(super::no_fuzzy_name_candidates_brp_error(&fuzzy_name)),
     }
 }

@@ -1,13 +1,14 @@
 //! Provides a plugin that adds custom BRP verbs
 //! for methods defined in this library.
 //!
-//! To remotely use [`World`] and [`Commands`] methods defined in this crate,
+//! To remotely use [`World`] methods
+//! and some other items defined in this crate,
 //! set up the BRP server in your Bevy app
 //! according to [`bevy::remote`]'s documentation.
 //! Then, register the custom methods by adding the [`InspectorBrpPlugin`].
 //! Now you can send inspector requests via BRP to your app and get a response.
 //!
-//! Refer to the submodules to learn more about the handlers.
+//! Refer to the submodules to learn more about specific handlers.
 
 use bevy::{
     ecs::component::ComponentId,
@@ -116,6 +117,30 @@ pub fn component_type_to_metadata<'metadata>(
     })
 }
 
+/// Custom BRP error codes for this library.
 pub mod error_codes {
-    pub const FUZZY_NAME_MATCH_FAIL: i16 = 1;
+    /// Fuzzy name mapping returned no candidates.
+    pub const NO_FUZZY_NAME_CANDIDATES: i16 = 1;
+    /// The [`ComponentMetadataMap`] does not contain data about the given component.
+    ///
+    /// [`ComponentMetadataMap`]: crate::component_inspection::ComponentMetadataMap
+    pub const COMPONENT_TYPE_NOT_IN_METADATA: i16 = 2;
+}
+
+fn no_fuzzy_name_candidates_brp_error(fuzzy_name: &str) -> BrpError {
+    let data = serde_json::to_value(fuzzy_name.to_string()).ok();
+    BrpError {
+        code: error_codes::NO_FUZZY_NAME_CANDIDATES,
+        message: format!("No matches found for fuzzy name \"{fuzzy_name}\""),
+        data,
+    }
+}
+
+fn component_type_not_in_metadata_brp_error(component_type: &str) -> BrpError {
+    let data = serde_json::to_value(component_type.to_string()).ok();
+    BrpError {
+        code: error_codes::COMPONENT_TYPE_NOT_IN_METADATA,
+        message: format!("Component not found in metadata: `{component_type}`"),
+        data,
+    }
 }

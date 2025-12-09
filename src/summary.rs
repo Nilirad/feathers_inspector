@@ -8,7 +8,7 @@ use bevy::{
 };
 
 /// Settings for [`WorldSummary`].
-#[derive(Clone, Debug, Copy, PartialEq)]
+#[derive(Clone, Debug, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SummarySettings {
     /// Whether to use component names
