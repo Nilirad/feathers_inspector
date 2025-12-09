@@ -10,17 +10,15 @@
 //! Refer to the constants defined in this module
 //! to understand the names of the registered methods.
 
-use bevy::{
-    ecs::component::ComponentId,
-    prelude::*,
-    remote::{BrpError, error_codes},
-};
+use bevy::{ecs::component::ComponentId, prelude::*, remote::BrpError};
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::component_inspection::{ComponentMetadataMap, ComponentTypeMetadata};
 
 pub mod component_metadata_map_generate;
+pub mod fuzzy_component_name_to_name;
+pub mod fuzzy_resource_name_to_name;
 pub mod inspect;
 pub mod inspect_all_resources;
 pub mod inspect_cached;
@@ -44,6 +42,8 @@ impl Plugin for InspectorBrpPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             component_metadata_map_generate::VerbPlugin,
+            fuzzy_component_name_to_name::VerbPlugin,
+            fuzzy_resource_name_to_name::VerbPlugin,
             inspect::VerbPlugin,
             inspect_all_resources::VerbPlugin,
             inspect_cached::VerbPlugin,
@@ -61,7 +61,7 @@ impl Plugin for InspectorBrpPlugin {
 //       Remove once https://github.com/bevyengine/bevy/pull/22005 is merged and released.
 fn parse<T: for<'de> Deserialize<'de>>(value: Value) -> Result<T, BrpError> {
     serde_json::from_value(value).map_err(|err| BrpError {
-        code: error_codes::INVALID_PARAMS,
+        code: bevy::remote::error_codes::INVALID_PARAMS,
         message: err.to_string(),
         data: None,
     })
@@ -74,7 +74,7 @@ fn parse_some<T: for<'de> Deserialize<'de>>(value: Option<Value>) -> Result<T, B
     match value {
         Some(value) => parse(value),
         None => Err(BrpError {
-            code: error_codes::INVALID_PARAMS,
+            code: bevy::remote::error_codes::INVALID_PARAMS,
             message: String::from("Params not provided"),
             data: None,
         }),
@@ -90,4 +90,8 @@ pub fn component_type_to_metadata<'metadata>(
         let full = meta.name.to_string();
         (full == component_type).then_some((*id, meta))
     })
+}
+
+pub mod error_codes {
+    pub const FUZZY_NAME_MATCH_FAIL: i16 = 1;
 }
