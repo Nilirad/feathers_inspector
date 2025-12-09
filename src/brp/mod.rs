@@ -127,7 +127,7 @@ pub mod error_codes {
     pub const COMPONENT_TYPE_NOT_IN_METADATA: i16 = 2;
 }
 
-fn no_fuzzy_name_candidates_brp_error(fuzzy_name: &str) -> BrpError {
+pub fn no_fuzzy_name_candidates_brp_error(fuzzy_name: &str) -> BrpError {
     let data = serde_json::to_value(fuzzy_name.to_string()).ok();
     BrpError {
         code: error_codes::NO_FUZZY_NAME_CANDIDATES,
@@ -136,7 +136,7 @@ fn no_fuzzy_name_candidates_brp_error(fuzzy_name: &str) -> BrpError {
     }
 }
 
-fn component_type_not_in_metadata_brp_error(component_type: &str) -> BrpError {
+pub fn component_type_not_in_metadata_brp_error(component_type: &str) -> BrpError {
     let data = serde_json::to_value(component_type.to_string()).ok();
     BrpError {
         code: error_codes::COMPONENT_TYPE_NOT_IN_METADATA,
