@@ -49,7 +49,7 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
     }
 }
 
-fn determine_error(entity: Entity, inspection_error: EntityInspectionError) -> BrpError {
+pub(super) fn determine_error(entity: Entity, inspection_error: EntityInspectionError) -> BrpError {
     use EntityInspectionError::*;
     use bevy::ecs::query::QueryEntityError::*;
     match inspection_error {

@@ -5,7 +5,6 @@
 //! ```bash
 //! cargo run --example brp_client --features="remote"
 //! ```
-// TODO: Generate component metadata map once and store it in a resource.
 
 use bevy::prelude::*;
 use bevy::remote::BrpRequest;
@@ -224,8 +223,6 @@ fn summarize_when_s_pressed(keyboard_input: Res<ButtonInput<KeyCode>>, brp_url: 
 
 // Since BRP request and response handling are quite verbose,
 // we define a helper module to contain the complexity.
-// TODO: Helpers should return concrete types instead of a JSON string,
-//       just like `generate_component_metadata` does.
 mod helper {
     use serde::{Serialize, de::DeserializeOwned};
 

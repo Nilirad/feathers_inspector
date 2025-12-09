@@ -40,9 +40,9 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
     let metadata_map = metadata_map.unwrap_or(ComponentMetadataMap::generate(world));
     let Some((component_id, _)) = super::component_type_to_metadata(&component_type, &metadata_map)
     else {
-        return Err(BrpError::component_error(
-            "Component not found in metadata: `{component_type}`",
-        ));
+        return Err(BrpError::component_error(format!(
+            "Component not found in metadata: `{component_type}`"
+        )));
     };
     match world.inspect_component_type_by_id(component_id) {
         Ok(inspection) => Ok(serde_json::to_value(inspection).map_err(BrpError::internal)?),

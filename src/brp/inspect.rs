@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    entity_inspection::{EntityInspectionError, EntityInspectionSettings},
+    brp::inspect_cached::determine_error, entity_inspection::EntityInspectionSettings,
     extension_methods::WorldInspectionExtensionTrait,
 };
 
@@ -40,22 +40,5 @@ pub fn process_remote_request(In(params): In<Option<Value>>, world: &World) -> B
             serde_json::to_value(entity_inspection).map_err(BrpError::internal)
         }
         Err(inspection_error) => Err(determine_error(entity, inspection_error)),
-    }
-}
-
-fn determine_error(entity: Entity, inspection_error: EntityInspectionError) -> BrpError {
-    use EntityInspectionError::*;
-    use bevy::ecs::query::QueryEntityError::*;
-    match inspection_error {
-        EntityNotFound(_) => BrpError::entity_not_found(entity),
-        UnexpectedQueryError(query_entity_error) => match query_entity_error {
-            QueryDoesNotMatch(_, _) => {
-                BrpError::internal("Reached invalid state: `QueryDoesNotMatch` on `SpawnDetails`")
-            }
-            EntityDoesNotExist(_) => BrpError::entity_not_found(entity),
-            AliasedMutability(_) => {
-                BrpError::internal("Reached invalid state: `AliasedMutability`")
-            }
-        },
     }
 }
