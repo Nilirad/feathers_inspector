@@ -9,7 +9,11 @@
 //!
 //! Refer to the submodules to learn more about the handlers.
 
-use bevy::{ecs::component::ComponentId, prelude::*, remote::BrpError};
+use bevy::{
+    ecs::component::ComponentId,
+    prelude::*,
+    remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
+};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -53,6 +57,27 @@ impl Plugin for InspectorBrpPlugin {
             summarize::VerbPlugin,
         ));
     }
+}
+
+/// Registers an instant BRP method system under the given `method` name.
+///
+/// ## Panics
+///
+/// - If the [`RemotePlugin`] hasn't been added to the app
+///   (i.e., [`RemoteMethods`] resource is missing).
+///
+/// [`RemotePlugin`]: bevy::remote::RemotePlugin
+pub(crate) fn register_remote_method(
+    world: &mut World,
+    method: &str,
+    system: fn(bevy::prelude::In<Option<Value>>, &World) -> BrpResult,
+) {
+    let system_id = world.register_system(system);
+
+    let mut remote_methods = world
+        .get_resource_mut::<RemoteMethods>()
+        .expect("`RemotePlugin` must be present");
+    remote_methods.insert(method, RemoteMethodSystemId::Instant(system_id));
 }
 
 /// A helper function used to parse a `serde_json::Value`.

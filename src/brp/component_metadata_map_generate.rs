@@ -1,7 +1,7 @@
 //! Handles a `component_metadata_map.generate` request coming from a client.
 use bevy::{
     prelude::*,
-    remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods},
+    remote::{BrpError, BrpResult},
 };
 use serde_json::Value;
 
@@ -14,11 +14,7 @@ pub(crate) struct VerbPlugin;
 impl Plugin for VerbPlugin {
     fn build(&self, app: &mut App) {
         let world = app.world_mut();
-        let system_id = world.register_system(process_remote_request);
-        let mut remote_methods = world
-            .get_resource_mut::<RemoteMethods>()
-            .expect("`RemotePlugin` must be present");
-        remote_methods.insert(METHOD, RemoteMethodSystemId::Instant(system_id));
+        super::register_remote_method(world, METHOD, process_remote_request);
     }
 }
 
